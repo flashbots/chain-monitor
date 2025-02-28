@@ -41,13 +41,13 @@ type Server struct {
 	blocksLanded int64
 
 	blocks  *types.RingBuffer[bool]
-	wallets []ethcommon.Address
+	wallets map[string]ethcommon.Address
 }
 
 func New(cfg *config.Config) (*Server, error) {
 	var (
 		builderAddr ethcommon.Address
-		wallets     = make([]ethcommon.Address, 0, len(cfg.Eth.WalletAddresses))
+		wallets     = make(map[string]ethcommon.Address, len(cfg.Eth.WalletAddresses))
 	)
 
 	{ // builder address
@@ -61,7 +61,7 @@ func New(cfg *config.Config) (*Server, error) {
 		copy(builderAddr[:], addr)
 	}
 
-	for _, wa := range cfg.Eth.WalletAddresses {
+	for name, wa := range cfg.Eth.WalletAddresses {
 		_addr, err := ethcommon.ParseHexOrString(wa)
 		if err != nil {
 			return nil, err
@@ -71,7 +71,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		var addr ethcommon.Address
 		copy(addr[:], _addr)
-		wallets = append(wallets, addr)
+		wallets[name] = addr
 	}
 
 	eth, err := ethclient.Dial(cfg.Eth.RPC)

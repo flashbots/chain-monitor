@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -78,7 +79,18 @@ func CommandServe(cfg *config.Config) *cli.Command {
 		Flags: flags,
 
 		Before: func(_ *cli.Context) error {
-			cfg.Eth.WalletAddresses = walletAddresses.Value()
+			_walletAddresses := make(map[string]string, len(walletAddresses.Value()))
+			for _, wa := range walletAddresses.Value() {
+				parts := strings.Split(wa, "=")
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+				}
+				name := strings.TrimSpace(parts[0])
+				addr := strings.TrimSpace(parts[1])
+				_walletAddresses[name] = addr
+			}
+
+			cfg.Eth.WalletAddresses = _walletAddresses
 			return cfg.Validate()
 		},
 

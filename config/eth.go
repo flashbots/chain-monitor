@@ -10,11 +10,11 @@ import (
 )
 
 type Eth struct {
-	BlockTime       time.Duration `yaml:"block_time"`
-	BuilderAddress  string        `yaml:"builder_address"`
-	ReorgWindow     int           `yaml:"reorg_window"`
-	RPC             string        `yaml:"rpc"`
-	WalletAddresses []string      `yaml:"wallet_addresses"`
+	BlockTime       time.Duration     `yaml:"block_time"`
+	BuilderAddress  string            `yaml:"builder_address"`
+	ReorgWindow     int               `yaml:"reorg_window"`
+	RPC             string            `yaml:"rpc"`
+	WalletAddresses map[string]string `yaml:"wallet_addresses"`
 }
 
 const (

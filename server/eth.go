@@ -162,7 +162,7 @@ func (s *Server) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
 func (s *Server) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
-	for _, addr := range s.wallets {
+	for name, addr := range s.wallets {
 		_balance, err := s.eth.BalanceAt(ctx, addr, nil)
 		if err != nil {
 			errs = append(errs, err)
@@ -172,7 +172,8 @@ func (s *Server) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		balance, _ := _balance.Float64()
 
 		o.ObserveFloat64(metrics.WalletBalance, balance, otelapi.WithAttributes(
-			attribute.KeyValue{Key: "address", Value: attribute.StringValue(addr.String())},
+			attribute.KeyValue{Key: "wallet_address", Value: attribute.StringValue(addr.String())},
+			attribute.KeyValue{Key: "wallet_name", Value: attribute.StringValue(name)},
 		))
 	}
 

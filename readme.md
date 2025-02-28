@@ -7,7 +7,7 @@ go run github.com/flashbots/chain-monitor/cmd serve \
   --eth-block-time 1s \
   --eth-rpc http://127.0.0.1:8645 \
   --eth-builder-address 0xdD11751cdD3f6EFf01B1f6151B640685bfa5dB4a \
-  --eth-monitor-wallets 0xdD11751cdD3f6EFf01B1f6151B640685bfa5dB4a
+  --eth-monitor-wallets builder=0xdD11751cdD3f6EFf01B1f6151B640685bfa5dB4a
 ```
 
 ```shell
