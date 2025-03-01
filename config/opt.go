@@ -18,7 +18,7 @@ type Opt struct {
 }
 
 const (
-	maxReorgWindow = 86400
+	maxReorgWindow = 24 * time.Hour
 )
 
 var (
