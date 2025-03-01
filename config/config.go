@@ -6,14 +6,14 @@ import (
 )
 
 type Config struct {
-	Eth    *Eth    `yaml:"eth"`
+	Opt    *Opt    `yaml:"eth"`
 	Log    *Log    `yaml:"log"`
 	Server *Server `yaml:"server"`
 }
 
 func New() *Config {
 	return &Config{
-		Eth:    &Eth{},
+		Opt:    &Opt{},
 		Log:    &Log{},
 		Server: &Server{},
 	}

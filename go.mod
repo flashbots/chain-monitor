@@ -19,10 +19,8 @@ require (
 )
 
 replace github.com/ethereum/go-ethereum => github.com/ethereum-optimism/op-geth v1.101500.1
-
-replace github.com/ethereum/go-ethereum/core/types => github.com/ethereum-optimism/op-geth/core/types v1.101500.1
-
 replace github.com/ethereum/go-ethereum/common => github.com/ethereum-optimism/op-geth/common v1.101500.1
+replace github.com/ethereum/go-ethereum/core/types => github.com/ethereum-optimism/op-geth/core/types v1.101500.1
 
 require (
 	github.com/BurntSushi/toml v1.4.0 // indirect

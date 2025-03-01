@@ -28,40 +28,41 @@ type Server struct {
 
 	failure chan error
 
-	eth    *ethclient.Client
 	logger *zap.Logger
 	server *http.Server
-	ticker *time.Ticker
 
-	builderAddr ethcommon.Address
+	optBuilderAddr ethcommon.Address
+	optReorgWindow int
+	optWallets     map[string]ethcommon.Address
 
-	blockHeight uint64
+	opt       *ethclient.Client
+	optTicker *time.Ticker
 
-	blocksSeen   int64
-	blocksLanded int64
-
-	blocks  *types.RingBuffer[bool]
-	wallets map[string]ethcommon.Address
+	optBlockHeight  uint64
+	optBlocks       *types.RingBuffer[bool]
+	optBlocksLanded int64
+	optBlocksSeen   int64
 }
 
 func New(cfg *config.Config) (*Server, error) {
 	var (
-		builderAddr ethcommon.Address
-		wallets     = make(map[string]ethcommon.Address, len(cfg.Eth.WalletAddresses))
+		optBuilderAddr ethcommon.Address
+		optWallets     = make(map[string]ethcommon.Address, len(cfg.Opt.WalletAddresses))
 	)
 
 	{ // builder address
-		addr, err := ethcommon.ParseHexOrString(cfg.Eth.BuilderAddress)
+		addr, err := ethcommon.ParseHexOrString(cfg.Opt.BuilderAddress)
 		if err != nil {
 			return nil, err
 		}
 		if len(addr) != 20 {
 			return nil, errors.New("invalid length for the builder address")
 		}
-		copy(builderAddr[:], addr)
+		copy(optBuilderAddr[:], addr)
 	}
 
-	for name, wa := range cfg.Eth.WalletAddresses {
+	for name, wa := range cfg.Opt.WalletAddresses {
+		var addr ethcommon.Address
 		_addr, err := ethcommon.ParseHexOrString(wa)
 		if err != nil {
 			return nil, err
@@ -69,29 +70,30 @@ func New(cfg *config.Config) (*Server, error) {
 		if len(_addr) != 20 {
 			return nil, errors.New("invalid length for the wallet address")
 		}
-		var addr ethcommon.Address
 		copy(addr[:], _addr)
-		wallets[name] = addr
+		optWallets[name] = addr
 	}
 
-	eth, err := ethclient.Dial(cfg.Eth.RPC)
+	opt, err := ethclient.Dial(cfg.Opt.RPC)
 	if err != nil {
 		return nil, err
 	}
 
-	blockHeight, err := eth.BlockNumber(context.Background())
+	optBlockHeight, err := opt.BlockNumber(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
 	s := &Server{
-		blockHeight: blockHeight - 1,
-		builderAddr: builderAddr,
-		cfg:         cfg,
-		eth:         eth,
-		failure:     make(chan error, 1),
-		logger:      zap.L(),
-		wallets:     wallets,
+		cfg:     cfg,
+		failure: make(chan error, 1),
+		logger:  zap.L(),
+
+		opt:            opt,
+		optBlockHeight: optBlockHeight - 1,
+		optBuilderAddr: optBuilderAddr,
+		optReorgWindow: int(cfg.Opt.ReorgWindow/cfg.Opt.BlockTime) + 1,
+		optWallets:     optWallets,
 	}
 
 	mux := http.NewServeMux()
@@ -130,11 +132,11 @@ func (s *Server) Run() error {
 		l.Info("Chain monitor server is down")
 	}()
 
-	{ // start the block ticker
-		s.ticker = time.NewTicker(s.cfg.Eth.BlockTime)
+	{ // start the optimism block ticker
+		s.optTicker = time.NewTicker(s.cfg.Opt.BlockTime)
 		go func() {
 			for {
-				<-s.ticker.C
+				<-s.optTicker.C
 				s.processNewBlocks(ctx)
 			}
 		}()
@@ -171,7 +173,7 @@ func (s *Server) Run() error {
 	}
 
 	{ // stop the block ticker
-		s.ticker.Stop()
+		s.optTicker.Stop()
 	}
 
 	{ // stop the server
@@ -185,7 +187,7 @@ func (s *Server) Run() error {
 	}
 
 	{ // close the eth client
-		s.eth.Close()
+		s.opt.Close()
 	}
 
 	switch len(errs) {

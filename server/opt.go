@@ -22,65 +22,65 @@ import (
 func (s *Server) processNewBlocks(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
-	blockHeight, err := s.eth.BlockNumber(ctx)
+	blockHeight, err := s.opt.BlockNumber(ctx)
 	if err != nil {
 		l.Error("Failed to get block height, skipping this round...",
 			zap.Error(err),
-			zap.String("rpc", s.cfg.Eth.RPC),
+			zap.String("rpc", s.cfg.Opt.RPC),
 		)
 		return
 	}
 
-	if blockHeight == s.blockHeight {
+	if blockHeight == s.optBlockHeight {
 		return
 	}
 
-	if blockHeight < s.blockHeight {
+	if blockHeight < s.optBlockHeight {
 		s.processReorg(ctx, blockHeight)
 	}
 
-	for b := s.blockHeight + 1; b <= blockHeight; b++ {
+	for b := s.optBlockHeight + 1; b <= blockHeight; b++ {
 		if err := s.processBlock(ctx, b); err != nil {
 			l.Error("Failed to process block, skipping this round...",
 				zap.Error(err),
 				zap.Uint64("block", blockHeight),
-				zap.String("rpc", s.cfg.Eth.RPC),
+				zap.String("rpc", s.cfg.Opt.RPC),
 			)
 			return
 		}
-		s.blockHeight = b
+		s.optBlockHeight = b
 	}
 }
 
 func (s *Server) processBlock(ctx context.Context, blockNumber uint64) error {
 	l := logutils.LoggerFromContext(ctx)
 
-	block, err := s.eth.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+	block, err := s.opt.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
 		return err
 	}
 
-	if s.blocks == nil {
-		s.blocks = types.NewRingBuffer[bool](int(blockNumber), s.cfg.Eth.ReorgWindow)
+	if s.optBlocks == nil {
+		s.optBlocks = types.NewRingBuffer[bool](int(blockNumber), s.optReorgWindow)
 	}
 
-	s.blocksSeen++
-	metrics.BlocksSeen.Record(ctx, s.blocksSeen)
+	s.optBlocksSeen++
+	metrics.BlocksSeen.Record(ctx, s.optBlocksSeen)
 
 	if s.hasBuilderTx(ctx, block) {
-		s.blocks.Push(true)
-		s.blocksLanded++
-		metrics.BlocksLanded.Record(ctx, s.blocksLanded)
+		s.optBlocks.Push(true)
+		s.optBlocksLanded++
+		metrics.BlocksLanded.Record(ctx, s.optBlocksLanded)
 	} else {
-		s.blocks.Push(false)
+		s.optBlocks.Push(false)
 		metrics.BlockMissed.Record(ctx, int64(blockNumber))
 		l.Warn("Builder had missed a block",
 			zap.Uint64("block", blockNumber),
 		)
 	}
 
-	if s.blocks.Length() > s.cfg.Eth.ReorgWindow {
-		_, _ = s.blocks.Pop()
+	if s.optBlocks.Length() > s.optReorgWindow {
+		_, _ = s.optBlocks.Pop()
 	}
 
 	return nil
@@ -89,18 +89,18 @@ func (s *Server) processBlock(ctx context.Context, blockNumber uint64) error {
 func (s *Server) processReorg(ctx context.Context, newBlockHeight uint64) {
 	l := logutils.LoggerFromContext(ctx)
 
-	depth := s.blockHeight - newBlockHeight + 1
+	depth := s.optBlockHeight - newBlockHeight + 1
 
-	if depth < uint64(s.cfg.Eth.ReorgWindow) {
+	if depth < uint64(s.cfg.Opt.ReorgWindow) {
 		l.Warn("Chain reorg detected",
 			zap.Uint64("current", newBlockHeight),
-			zap.Uint64("seen", s.blockHeight),
+			zap.Uint64("seen", s.optBlockHeight),
 			zap.Uint64("depth", depth),
 		)
 	} else {
 		l.Warn("Super-deep chain reorg detected",
 			zap.Uint64("current", newBlockHeight),
-			zap.Uint64("seen", s.blockHeight),
+			zap.Uint64("seen", s.optBlockHeight),
 			zap.Uint64("depth", depth),
 		)
 	}
@@ -109,17 +109,17 @@ func (s *Server) processReorg(ctx context.Context, newBlockHeight uint64) {
 	metrics.ReorgDepth.Record(ctx, int64(depth))
 
 	adjustment := 0
-	for b := newBlockHeight; b <= s.blockHeight; b++ {
-		if landed, _ := s.blocks.At(int(b)); landed {
+	for b := newBlockHeight; b <= s.optBlockHeight; b++ {
+		if landed, _ := s.optBlocks.At(int(b)); landed {
 			adjustment++
 		}
 	}
 
-	s.blocksSeen -= int64(depth)
-	metrics.BlocksSeen.Record(ctx, s.blocksSeen)
+	s.optBlocksSeen -= int64(depth)
+	metrics.BlocksSeen.Record(ctx, s.optBlocksSeen)
 
-	s.blocksLanded -= int64(adjustment)
-	metrics.BlocksLanded.Record(ctx, s.blocksLanded)
+	s.optBlocksLanded -= int64(adjustment)
+	metrics.BlocksLanded.Record(ctx, s.optBlocksLanded)
 }
 
 func (s *Server) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
@@ -151,7 +151,7 @@ func (s *Server) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
 			continue
 		}
 
-		if from.Cmp(s.builderAddr) == 0 {
+		if from.Cmp(s.optBuilderAddr) == 0 {
 			return true
 		}
 	}
@@ -162,8 +162,8 @@ func (s *Server) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
 func (s *Server) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
-	for name, addr := range s.wallets {
-		_balance, err := s.eth.BalanceAt(ctx, addr, nil)
+	for name, addr := range s.optWallets {
+		_balance, err := s.opt.BalanceAt(ctx, addr, nil)
 		if err != nil {
 			errs = append(errs, err)
 			continue

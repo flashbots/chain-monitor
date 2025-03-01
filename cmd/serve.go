@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	categoryEth    = "eth"
+	categoryOpt    = "optimism"
 	categoryServer = "server"
 )
 
@@ -22,37 +22,46 @@ func CommandServe(cfg *config.Config) *cli.Command {
 
 	ethFlags := []cli.Flag{
 		&cli.DurationFlag{
-			Category:    strings.ToUpper(categoryEth),
-			Destination: &cfg.Eth.BlockTime,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_BLOCK_TIME"},
-			Name:        categoryEth + "-block-time",
+			Category:    strings.ToUpper(categoryOpt),
+			Destination: &cfg.Opt.BlockTime,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_BLOCK_TIME"},
+			Name:        categoryOpt + "-block-time",
 			Usage:       "average `duration` between consecutive blocks",
 			Value:       12 * time.Second,
 		},
 
 		&cli.StringFlag{
-			Category:    strings.ToUpper(categoryEth),
-			Destination: &cfg.Eth.BuilderAddress,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_BUILDER_ADDRESS"},
-			Name:        categoryEth + "-builder-address",
+			Category:    strings.ToUpper(categoryOpt),
+			Destination: &cfg.Opt.BuilderAddress,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_BUILDER_ADDRESS"},
+			Name:        categoryOpt + "-builder-address",
 			Required:    true,
 			Usage:       "builder `address`",
 		},
 
+		&cli.DurationFlag{
+			Category:    strings.ToUpper(categoryOpt),
+			Destination: &cfg.Opt.ReorgWindow,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_REORG_WINDOW"},
+			Name:        categoryOpt + "-reorg-window",
+			Usage:       "average `duration` between consecutive blocks",
+			Value:       24 * time.Hour,
+		},
+
 		&cli.StringFlag{
-			Category:    strings.ToUpper(categoryEth),
-			Destination: &cfg.Eth.RPC,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_RPC"},
-			Name:        categoryEth + "-rpc",
+			Category:    strings.ToUpper(categoryOpt),
+			Destination: &cfg.Opt.RPC,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_RPC"},
+			Name:        categoryOpt + "-rpc",
 			Usage:       "`url` of ethereum rpc endpoint",
 			Value:       "http://127.0.0.1:8645",
 		},
 
 		&cli.StringSliceFlag{
-			Category:    strings.ToUpper(categoryEth),
+			Category:    strings.ToUpper(categoryOpt),
 			Destination: walletAddresses,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_MONITOR_WALLETS"},
-			Name:        categoryEth + "-monitor-wallets",
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_MONITOR_WALLETS"},
+			Name:        categoryOpt + "-monitor-wallets",
 			Usage:       "`list` of wallet addresses to monitor the balances of",
 		},
 	}
@@ -90,7 +99,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 				_walletAddresses[name] = addr
 			}
 
-			cfg.Eth.WalletAddresses = _walletAddresses
+			cfg.Opt.WalletAddresses = _walletAddresses
 			return cfg.Validate()
 		},
 

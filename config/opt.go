@@ -9,10 +9,10 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
-type Eth struct {
+type Opt struct {
 	BlockTime       time.Duration     `yaml:"block_time"`
 	BuilderAddress  string            `yaml:"builder_address"`
-	ReorgWindow     int               `yaml:"reorg_window"`
+	ReorgWindow     time.Duration     `yaml:"reorg_window"`
 	RPC             string            `yaml:"rpc"`
 	WalletAddresses map[string]string `yaml:"wallet_addresses"`
 }
@@ -28,7 +28,7 @@ var (
 	errEthReorgWindowTooLarge   = errors.New("reorg window is too large")
 )
 
-func (cfg *Eth) Validate() error {
+func (cfg *Opt) Validate() error {
 	if _, err := url.Parse(cfg.RPC); err != nil {
 		return fmt.Errorf("%w: %s: %w",
 			errEthInvalidRPC,
