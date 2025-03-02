@@ -13,56 +13,76 @@ import (
 )
 
 const (
-	categoryOpt    = "optimism"
+	categoryEth    = "l1"
+	categoryL2     = "l2"
 	categoryServer = "server"
 )
 
 func CommandServe(cfg *config.Config) *cli.Command {
-	walletAddresses := &cli.StringSlice{}
+	l1WalletAddresses := &cli.StringSlice{}
+	l2WalletAddresses := &cli.StringSlice{}
 
-	ethFlags := []cli.Flag{
+	l1Flags := []cli.Flag{
+		&cli.StringFlag{
+			Category:    strings.ToUpper(categoryEth),
+			Destination: &cfg.L1.RPC,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_RPC"},
+			Name:        categoryEth + "-rpc",
+			Usage:       "`url` of l1 rpc endpoint",
+			Value:       "http://127.0.0.1:8545",
+		},
+
+		&cli.StringSliceFlag{
+			Category:    strings.ToUpper(categoryEth),
+			Destination: l1WalletAddresses,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_MONITOR_WALLETS"},
+			Name:        categoryEth + "-monitor-wallets",
+			Usage:       "`list` of l1 wallet addresses to monitor the balances of",
+		},
+	}
+
+	l2Flags := []cli.Flag{
 		&cli.DurationFlag{
-			Category:    strings.ToUpper(categoryOpt),
-			Destination: &cfg.Opt.BlockTime,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_BLOCK_TIME"},
-			Name:        categoryOpt + "-block-time",
-			Usage:       "average `duration` between consecutive blocks",
-			Value:       12 * time.Second,
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.BlockTime,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BLOCK_TIME"},
+			Name:        categoryL2 + "-block-time",
+			Usage:       "average `duration` between consecutive blocks on l2",
+			Value:       2 * time.Second,
 		},
 
 		&cli.StringFlag{
-			Category:    strings.ToUpper(categoryOpt),
-			Destination: &cfg.Opt.BuilderAddress,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_BUILDER_ADDRESS"},
-			Name:        categoryOpt + "-builder-address",
-			Required:    true,
-			Usage:       "builder `address`",
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.BuilderAddress,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BUILDER_ADDRESS"},
+			Name:        categoryL2 + "-builder-address",
+			Usage:       "l2 builder `address`",
 		},
 
 		&cli.DurationFlag{
-			Category:    strings.ToUpper(categoryOpt),
-			Destination: &cfg.Opt.ReorgWindow,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_REORG_WINDOW"},
-			Name:        categoryOpt + "-reorg-window",
-			Usage:       "average `duration` between consecutive blocks",
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ReorgWindow,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_REORG_WINDOW"},
+			Name:        categoryL2 + "-reorg-window",
+			Usage:       "max `duration` of block history to keep in memory for the l2 reorg adjustments",
 			Value:       24 * time.Hour,
 		},
 
 		&cli.StringFlag{
-			Category:    strings.ToUpper(categoryOpt),
-			Destination: &cfg.Opt.RPC,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_RPC"},
-			Name:        categoryOpt + "-rpc",
-			Usage:       "`url` of ethereum rpc endpoint",
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.RPC,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_RPC"},
+			Name:        categoryL2 + "-rpc",
+			Usage:       "`url` of l2 rpc endpoint",
 			Value:       "http://127.0.0.1:8645",
 		},
 
 		&cli.StringSliceFlag{
-			Category:    strings.ToUpper(categoryOpt),
-			Destination: walletAddresses,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryOpt) + "_MONITOR_WALLETS"},
-			Name:        categoryOpt + "-monitor-wallets",
-			Usage:       "`list` of wallet addresses to monitor the balances of",
+			Category:    strings.ToUpper(categoryL2),
+			Destination: l2WalletAddresses,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_WALLETS"},
+			Name:        categoryL2 + "-monitor-wallets",
+			Usage:       "`list` of l2 wallet addresses to monitor the balances of",
 		},
 	}
 
@@ -78,7 +98,8 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	flags := slices.Concat(
-		ethFlags,
+		l1Flags,
+		l2Flags,
 		serverFlags,
 	)
 
@@ -88,18 +109,36 @@ func CommandServe(cfg *config.Config) *cli.Command {
 		Flags: flags,
 
 		Before: func(_ *cli.Context) error {
-			_walletAddresses := make(map[string]string, len(walletAddresses.Value()))
-			for _, wa := range walletAddresses.Value() {
-				parts := strings.Split(wa, "=")
-				if len(parts) != 2 {
-					return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+			{
+				_walletAddresses := make(map[string]string, len(l1WalletAddresses.Value()))
+				for _, wa := range l1WalletAddresses.Value() {
+					parts := strings.Split(wa, "=")
+					if len(parts) != 2 {
+						return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+					}
+					name := strings.TrimSpace(parts[0])
+					addr := strings.TrimSpace(parts[1])
+					_walletAddresses[name] = addr
 				}
-				name := strings.TrimSpace(parts[0])
-				addr := strings.TrimSpace(parts[1])
-				_walletAddresses[name] = addr
+
+				cfg.L1.WalletAddresses = _walletAddresses
 			}
 
-			cfg.Opt.WalletAddresses = _walletAddresses
+			{
+				_walletAddresses := make(map[string]string, len(l2WalletAddresses.Value()))
+				for _, wa := range l2WalletAddresses.Value() {
+					parts := strings.Split(wa, "=")
+					if len(parts) != 2 {
+						return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+					}
+					name := strings.TrimSpace(parts[0])
+					addr := strings.TrimSpace(parts[1])
+					_walletAddresses[name] = addr
+				}
+
+				cfg.L2.WalletAddresses = _walletAddresses
+			}
+
 			return cfg.Validate()
 		},
 

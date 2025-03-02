@@ -11,16 +11,13 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	otelapi "go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
 	"github.com/flashbots/chain-monitor/config"
 	"github.com/flashbots/chain-monitor/httplogger"
 	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
-	"github.com/flashbots/chain-monitor/types"
-
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type Server struct {
@@ -31,55 +28,17 @@ type Server struct {
 	logger *zap.Logger
 	server *http.Server
 
-	optBuilderAddr ethcommon.Address
-	optReorgWindow int
-	optWallets     map[string]ethcommon.Address
-
-	opt       *ethclient.Client
-	optTicker *time.Ticker
-
-	optBlockHeight  uint64
-	optBlocks       *types.RingBuffer[bool]
-	optBlocksLanded int64
-	optBlocksSeen   int64
+	l1 *L1
+	l2 *L2
 }
 
 func New(cfg *config.Config) (*Server, error) {
-	var (
-		optBuilderAddr ethcommon.Address
-		optWallets     = make(map[string]ethcommon.Address, len(cfg.Opt.WalletAddresses))
-	)
-
-	{ // builder address
-		addr, err := ethcommon.ParseHexOrString(cfg.Opt.BuilderAddress)
-		if err != nil {
-			return nil, err
-		}
-		if len(addr) != 20 {
-			return nil, errors.New("invalid length for the builder address")
-		}
-		copy(optBuilderAddr[:], addr)
-	}
-
-	for name, wa := range cfg.Opt.WalletAddresses {
-		var addr ethcommon.Address
-		_addr, err := ethcommon.ParseHexOrString(wa)
-		if err != nil {
-			return nil, err
-		}
-		if len(_addr) != 20 {
-			return nil, errors.New("invalid length for the wallet address")
-		}
-		copy(addr[:], _addr)
-		optWallets[name] = addr
-	}
-
-	opt, err := ethclient.Dial(cfg.Opt.RPC)
+	l1, err := newL1(cfg.L1)
 	if err != nil {
 		return nil, err
 	}
 
-	optBlockHeight, err := opt.BlockNumber(context.Background())
+	l2, err := newL2(cfg.L2)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +46,9 @@ func New(cfg *config.Config) (*Server, error) {
 	s := &Server{
 		cfg:     cfg,
 		failure: make(chan error, 1),
+		l1:      l1,
+		l2:      l2,
 		logger:  zap.L(),
-
-		opt:            opt,
-		optBlockHeight: optBlockHeight - 1,
-		optBuilderAddr: optBuilderAddr,
-		optReorgWindow: int(cfg.Opt.ReorgWindow/cfg.Opt.BlockTime) + 1,
-		optWallets:     optWallets,
 	}
 
 	mux := http.NewServeMux()
@@ -118,7 +73,7 @@ func (s *Server) Run() error {
 	l := s.logger
 	ctx := logutils.ContextWithLogger(context.Background(), l)
 
-	if err := metrics.Setup(ctx, s.observeWallets); err != nil {
+	if err := metrics.Setup(ctx, s.observe); err != nil {
 		return err
 	}
 
@@ -132,14 +87,9 @@ func (s *Server) Run() error {
 		l.Info("Chain monitor server is down")
 	}()
 
-	{ // start the optimism block ticker
-		s.optTicker = time.NewTicker(s.cfg.Opt.BlockTime)
-		go func() {
-			for {
-				<-s.optTicker.C
-				s.processNewBlocks(ctx)
-			}
-		}()
+	{ // run the monitors
+		s.l1.run(ctx)
+		s.l2.run(ctx)
 	}
 
 	errs := []error{}
@@ -172,8 +122,9 @@ func (s *Server) Run() error {
 		}
 	}
 
-	{ // stop the block ticker
-		s.optTicker.Stop()
+	{ // stop the monitors
+		s.l2.stop()
+		s.l1.stop()
 	}
 
 	{ // stop the server
@@ -186,8 +137,8 @@ func (s *Server) Run() error {
 		}
 	}
 
-	{ // close the eth client
-		s.opt.Close()
+	{ // close the rpc client
+		s.l2.rpc.Close()
 	}
 
 	switch len(errs) {
@@ -198,4 +149,20 @@ func (s *Server) Run() error {
 	case 0:
 		return nil
 	}
+}
+
+func (s *Server) observe(ctx context.Context, o otelapi.Observer) error {
+	errL1 := s.l1.observeWallets(ctx, o)
+	errL2 := s.l2.observeWallets(ctx, o)
+
+	switch {
+	case errL1 != nil && errL2 != nil:
+		return errors.Join(errL1, errL2)
+	case errL1 != nil:
+		return errL1
+	case errL2 != nil:
+		return errL2
+	}
+
+	return nil
 }

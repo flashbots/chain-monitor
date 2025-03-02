@@ -9,7 +9,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
-type Opt struct {
+type L2 struct {
 	BlockTime       time.Duration     `yaml:"block_time"`
 	BuilderAddress  string            `yaml:"builder_address"`
 	ReorgWindow     time.Duration     `yaml:"reorg_window"`
@@ -22,16 +22,16 @@ const (
 )
 
 var (
-	errEthInvalidBuilderAddress = errors.New("invalid builder address")
-	errEthInvalidRPC            = errors.New("invalid rpc url")
-	errEthInvalidWalletAddress  = errors.New("invalid wallet address")
-	errEthReorgWindowTooLarge   = errors.New("reorg window is too large")
+	errL2InvalidBuilderAddress = errors.New("invalid l2 builder address")
+	errL2InvalidRPC            = errors.New("invalid l2 rpc url")
+	errL2InvalidWalletAddress  = errors.New("invalid l2 wallet address")
+	errL2ReorgWindowTooLarge   = errors.New("l2 reorg window is too large")
 )
 
-func (cfg *Opt) Validate() error {
+func (cfg *L2) Validate() error {
 	if _, err := url.Parse(cfg.RPC); err != nil {
 		return fmt.Errorf("%w: %s: %w",
-			errEthInvalidRPC,
+			errL2InvalidRPC,
 			cfg.RPC,
 			err,
 		)
@@ -39,41 +39,43 @@ func (cfg *Opt) Validate() error {
 
 	if cfg.ReorgWindow > maxReorgWindow {
 		return fmt.Errorf("%w (max %d): %d",
-			errEthReorgWindowTooLarge,
+			errL2ReorgWindowTooLarge,
 			maxReorgWindow,
 			cfg.ReorgWindow,
 		)
 	}
 
-	_addr, err := ethcommon.ParseHexOrString(cfg.BuilderAddress)
-	if err != nil {
-		return fmt.Errorf("%w: %s: %w",
-			errEthInvalidBuilderAddress,
-			cfg.BuilderAddress,
-			err,
-		)
-	}
-	if len(_addr) != 20 {
-		return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
-			errEthInvalidBuilderAddress,
-			cfg.BuilderAddress,
-			len(_addr),
-		)
-	}
-
-	for _, wa := range cfg.WalletAddresses {
+	if cfg.BuilderAddress != "" {
 		_addr, err := ethcommon.ParseHexOrString(cfg.BuilderAddress)
 		if err != nil {
 			return fmt.Errorf("%w: %s: %w",
-				errEthInvalidWalletAddress,
+				errL2InvalidBuilderAddress,
+				cfg.BuilderAddress,
+				err,
+			)
+		}
+		if len(_addr) != 20 {
+			return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+				errL2InvalidBuilderAddress,
+				cfg.BuilderAddress,
+				len(_addr),
+			)
+		}
+	}
+
+	for _, wa := range cfg.WalletAddresses {
+		_addr, err := ethcommon.ParseHexOrString(wa)
+		if err != nil {
+			return fmt.Errorf("%w: %s: %w",
+				errL2InvalidWalletAddress,
 				wa,
 				err,
 			)
 		}
 		if len(_addr) != 20 {
 			return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
-				errEthInvalidWalletAddress,
-				cfg.BuilderAddress,
+				errL2InvalidWalletAddress,
+				wa,
 				len(wa),
 			)
 		}
