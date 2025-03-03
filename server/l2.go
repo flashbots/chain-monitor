@@ -31,6 +31,7 @@ type L2 struct {
 	blockHeight  uint64
 	blocks       *types.RingBuffer[bool]
 	blocksLanded int64
+	blocksMissed int64
 	blocksSeen   int64
 	builderAddr  ethcommon.Address
 	reorgWindow  int
@@ -82,6 +83,8 @@ func newL2(cfg *config.L2) (*L2, error) {
 	if err != nil {
 		return nil, err
 	}
+	blockHeight--
+	blocks := types.NewRingBuffer[bool](int(blockHeight), int(cfg.ReorgWindow/cfg.BlockTime+1))
 
 	return &L2{
 		cfg: cfg,
@@ -89,7 +92,8 @@ func newL2(cfg *config.L2) (*L2, error) {
 		rpc:    rpc,
 		ticker: time.NewTicker(cfg.BlockTime),
 
-		blockHeight: blockHeight - 1,
+		blockHeight: blockHeight,
+		blocks:      blocks,
 		builderAddr: builderAddr,
 		reorgWindow: int(cfg.ReorgWindow/cfg.BlockTime) + 1,
 		wallets:     wallets,
@@ -124,6 +128,9 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	}
 
 	if blockHeight == l2.blockHeight {
+		l.Debug("Still at the same height, skipping...",
+			zap.Uint64("block_height", blockHeight),
+		)
 		return
 	}
 
@@ -132,6 +139,10 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	}
 
 	for b := l2.blockHeight + 1; b <= blockHeight; b++ {
+		l.Debug("Processing new l2 block",
+			zap.Uint64("block_height", b),
+		)
+
 		if err := l2.processBlock(ctx, b); err != nil {
 			l.Error("Failed to process block, skipping this round...",
 				zap.Error(err),
@@ -152,19 +163,17 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		return err
 	}
 
-	if l2.blocks == nil {
-		l2.blocks = types.NewRingBuffer[bool](int(blockNumber), l2.reorgWindow)
-	}
-
 	l2.blocksSeen++
-	metrics.BlocksSeen.Record(ctx, l2.blocksSeen)
+	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
 
 	if l2.hasBuilderTx(ctx, block) {
 		l2.blocks.Push(true)
 		l2.blocksLanded++
-		metrics.BlocksLanded.Record(ctx, l2.blocksLanded)
+		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
 	} else {
 		l2.blocks.Push(false)
+		l2.blocksMissed++
+		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 		metrics.BlockMissed.Record(ctx, int64(blockNumber))
 		l.Warn("Builder had missed a block",
 			zap.Uint64("block", blockNumber),
@@ -197,21 +206,29 @@ func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 		)
 	}
 
-	metrics.ReorgCount.Add(ctx, 1)
+	metrics.ReorgsCount.Add(ctx, 1)
 	metrics.ReorgDepth.Record(ctx, int64(depth))
 
-	adjustment := 0
+	adjustLanded := 0
+	adjustMissed := 0
 	for b := newBlockHeight; b <= l2.blockHeight; b++ {
-		if landed, _ := l2.blocks.At(int(b)); landed {
-			adjustment++
+		if landed, ok := l2.blocks.At(int(b)); ok {
+			if landed {
+				adjustLanded++
+			} else {
+				adjustMissed++
+			}
 		}
 	}
 
 	l2.blocksSeen -= int64(depth)
-	metrics.BlocksSeen.Record(ctx, l2.blocksSeen)
+	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
 
-	l2.blocksLanded -= int64(adjustment)
-	metrics.BlocksLanded.Record(ctx, l2.blocksLanded)
+	l2.blocksLanded -= int64(adjustLanded)
+	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
+
+	l2.blocksMissed -= int64(adjustMissed)
+	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
 
 	l2.blocks.Forget(int(depth))
 	l2.blockHeight = newBlockHeight - 1

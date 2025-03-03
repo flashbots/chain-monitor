@@ -23,10 +23,11 @@ func Setup(
 ) error {
 	for _, setup := range []func(context.Context) error{
 		setupMeter, // must come first
-		setupBlocksLanded,
-		setupBlocksSeen,
 		setupBlockMissed,
-		setupReorgCount,
+		setupBlocksLandedCount,
+		setupBlocksMissedCount,
+		setupBlocksSeenCount,
+		setupReorgsCount,
 		setupReorgDepth,
 		setupWalletBalance,
 	} {
@@ -69,28 +70,6 @@ func setupMeter(ctx context.Context) error {
 	return nil
 }
 
-func setupBlocksLanded(ctx context.Context) error {
-	blocksLanded, err := meter.Int64Gauge("blocks_landed",
-		otelapi.WithDescription("blocks landed by our builder"),
-	)
-	if err != nil {
-		return err
-	}
-	BlocksLanded = blocksLanded
-	return nil
-}
-
-func setupBlocksSeen(ctx context.Context) error {
-	blocksSeen, err := meter.Int64Gauge("blocks_seen",
-		otelapi.WithDescription("blocks seen by the monitor"),
-	)
-	if err != nil {
-		return err
-	}
-	BlocksSeen = blocksSeen
-	return nil
-}
-
 func setupBlockMissed(ctx context.Context) error {
 	blockMissed, err := meter.Int64Gauge("block_missed",
 		otelapi.WithDescription("height of the most recent missed block"),
@@ -102,14 +81,47 @@ func setupBlockMissed(ctx context.Context) error {
 	return nil
 }
 
-func setupReorgCount(ctx context.Context) error {
-	reorgCount, err := meter.Int64Counter("reorg_count",
+func setupBlocksLandedCount(ctx context.Context) error {
+	blocksLanded, err := meter.Int64Gauge("blocks_landed_count",
+		otelapi.WithDescription("blocks landed by our builder"),
+	)
+	if err != nil {
+		return err
+	}
+	BlocksLandedCount = blocksLanded
+	return nil
+}
+
+func setupBlocksMissedCount(ctx context.Context) error {
+	blocksMissed, err := meter.Int64Gauge("blocks_missed_count",
+		otelapi.WithDescription("blocks missed by our builder"),
+	)
+	if err != nil {
+		return err
+	}
+	BlocksMissedCount = blocksMissed
+	return nil
+}
+
+func setupBlocksSeenCount(ctx context.Context) error {
+	blocksSeen, err := meter.Int64Gauge("blocks_seen_count",
+		otelapi.WithDescription("blocks seen by the monitor"),
+	)
+	if err != nil {
+		return err
+	}
+	BlocksSeenCount = blocksSeen
+	return nil
+}
+
+func setupReorgsCount(ctx context.Context) error {
+	reorgCount, err := meter.Int64Counter("reorgs_count",
 		otelapi.WithDescription("chain reorgs count"),
 	)
 	if err != nil {
 		return err
 	}
-	ReorgCount = reorgCount
+	ReorgsCount = reorgCount
 	return nil
 }
 

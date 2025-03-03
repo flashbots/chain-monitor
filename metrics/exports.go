@@ -5,13 +5,14 @@ import (
 )
 
 var (
-	BlocksLanded otelapi.Int64Gauge
-	BlocksSeen   otelapi.Int64Gauge
+	BlocksLandedCount otelapi.Int64Gauge
+	BlocksMissedCount otelapi.Int64Gauge
+	BlocksSeenCount   otelapi.Int64Gauge
 
 	BlockMissed otelapi.Int64Gauge
 
-	ReorgCount otelapi.Int64Counter
-	ReorgDepth otelapi.Int64Gauge
+	ReorgsCount otelapi.Int64Counter
+	ReorgDepth  otelapi.Int64Gauge
 
 	WalletBalance otelapi.Float64ObservableGauge
 )
