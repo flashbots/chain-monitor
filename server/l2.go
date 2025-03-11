@@ -253,7 +253,7 @@ func (l2 *L2) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
 	expectedData := []byte(fmt.Sprintf("Block Number: %s", block.Number().String()))
 
 	for _, tx := range block.Transactions() {
-		if tx.To().Cmp(ethcommon.Address{}) != 0 {
+		if tx == nil || tx.To() == nil || tx.To().Cmp(ethcommon.Address{}) != 0 {
 			continue // builder's tx burns eth by sending it to zero address
 		}
 
