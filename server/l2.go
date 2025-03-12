@@ -198,10 +198,12 @@ func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 	metrics.ReorgsCount.Add(ctx, 1)
 	metrics.ReorgDepth.Record(ctx, int64(depth))
 
+	adjustSeen := 0
 	adjustLanded := 0
 	adjustMissed := 0
 	for b := newBlockHeight; b <= l2.blockHeight; b++ {
 		if landed, ok := l2.blocks.At(int(b)); ok {
+			adjustSeen++
 			if landed {
 				adjustLanded++
 			} else {
@@ -210,7 +212,7 @@ func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 		}
 	}
 
-	l2.blocksSeen -= int64(depth)
+	l2.blocksSeen -= int64(adjustSeen)
 	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
 
 	l2.blocksLanded -= int64(adjustLanded)
@@ -219,32 +221,19 @@ func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 	l2.blocksMissed -= int64(adjustMissed)
 	metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 
-	l2.blocks.Forget(int(depth))
+	l2.blocks.Forget(adjustSeen)
 	l2.blockHeight = newBlockHeight - 1
 
-	if depth < uint64(l2.cfg.ReorgWindow) {
-		l.Warn("Chain reorg detected",
-			zap.Int("adjust_landed", adjustLanded),
-			zap.Int("adjust_missed", adjustMissed),
-			zap.Uint64("adjust_seen", depth),
-			zap.Int64("blocks_landed", l2.blocksLanded),
-			zap.Int64("blocks_missed", l2.blocksMissed),
-			zap.Int64("blocks_seen", l2.blocksSeen),
-			zap.Uint64("block_height", newBlockHeight),
-			zap.Uint64("reorg_depth", depth),
-		)
-	} else {
-		l.Warn("Super-deep chain reorg detected",
-			zap.Int("adjust_landed", adjustLanded),
-			zap.Int("adjust_missed", adjustMissed),
-			zap.Uint64("adjust_seen", depth),
-			zap.Int64("blocks_landed", l2.blocksLanded),
-			zap.Int64("blocks_missed", l2.blocksMissed),
-			zap.Int64("blocks_seen", l2.blocksSeen),
-			zap.Uint64("block_height", newBlockHeight),
-			zap.Uint64("reorg_depth", depth),
-		)
-	}
+	l.Warn("Chain reorg detected",
+		zap.Int("adjust_seen", adjustSeen),
+		zap.Int("adjust_landed", adjustLanded),
+		zap.Int("adjust_missed", adjustMissed),
+		zap.Int64("blocks_landed", l2.blocksLanded),
+		zap.Int64("blocks_missed", l2.blocksMissed),
+		zap.Int64("blocks_seen", l2.blocksSeen),
+		zap.Uint64("block_height", newBlockHeight),
+		zap.Uint64("reorg_depth", depth),
+	)
 }
 
 func (l2 *L2) hasBuilderTx(ctx context.Context, block *ethtypes.Block) bool {
