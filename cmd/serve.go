@@ -59,6 +59,14 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Usage:       "l2 builder `address`",
 		},
 
+		&cli.StringFlag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorPrivateKey,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_PRIVATE_KEY"},
+			Name:        categoryL2 + "-monitor-private-key",
+			Usage:       "l2 private `key` to send tx inclusion latency probes with",
+		},
+
 		&cli.DurationFlag{
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.ReorgWindow,

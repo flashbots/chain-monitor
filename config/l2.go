@@ -7,14 +7,16 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type L2 struct {
-	BlockTime       time.Duration     `yaml:"block_time"`
-	BuilderAddress  string            `yaml:"builder_address"`
-	ReorgWindow     time.Duration     `yaml:"reorg_window"`
-	RPC             string            `yaml:"rpc"`
-	WalletAddresses map[string]string `yaml:"wallet_addresses"`
+	BlockTime         time.Duration     `yaml:"block_time"`
+	BuilderAddress    string            `yaml:"builder_address"`
+	MonitorPrivateKey string            `yaml:"monitor_private_key"`
+	ReorgWindow       time.Duration     `yaml:"reorg_window"`
+	RPC               string            `yaml:"rpc"`
+	WalletAddresses   map[string]string `yaml:"wallet_addresses"`
 }
 
 const (
@@ -22,10 +24,11 @@ const (
 )
 
 var (
-	errL2InvalidBuilderAddress = errors.New("invalid l2 builder address")
-	errL2InvalidRPC            = errors.New("invalid l2 rpc url")
-	errL2InvalidWalletAddress  = errors.New("invalid l2 wallet address")
-	errL2ReorgWindowTooLarge   = errors.New("l2 reorg window is too large")
+	errL2InvalidBuilderAddress    = errors.New("invalid l2 builder address")
+	errL2InvalidMonitorPrivateKey = errors.New("invalid monitor's private key")
+	errL2InvalidRPC               = errors.New("invalid l2 rpc url")
+	errL2InvalidWalletAddress     = errors.New("invalid l2 wallet address")
+	errL2ReorgWindowTooLarge      = errors.New("l2 reorg window is too large")
 )
 
 func (cfg *L2) Validate() error {
@@ -34,14 +37,6 @@ func (cfg *L2) Validate() error {
 			errL2InvalidRPC,
 			cfg.RPC,
 			err,
-		)
-	}
-
-	if cfg.ReorgWindow > maxReorgWindow {
-		return fmt.Errorf("%w (max %d): %d",
-			errL2ReorgWindowTooLarge,
-			maxReorgWindow,
-			cfg.ReorgWindow,
 		)
 	}
 
@@ -61,6 +56,23 @@ func (cfg *L2) Validate() error {
 				len(_addr),
 			)
 		}
+	}
+
+	if cfg.MonitorPrivateKey != "" {
+		if _, err := crypto.HexToECDSA(cfg.MonitorPrivateKey); err != nil {
+			return fmt.Errorf("%w: %w",
+				errL2InvalidMonitorPrivateKey,
+				err,
+			)
+		}
+	}
+
+	if cfg.ReorgWindow > maxReorgWindow {
+		return fmt.Errorf("%w (max %d): %d",
+			errL2ReorgWindowTooLarge,
+			maxReorgWindow,
+			cfg.ReorgWindow,
+		)
 	}
 
 	for _, wa := range cfg.WalletAddresses {

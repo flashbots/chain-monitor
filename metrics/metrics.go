@@ -30,6 +30,10 @@ func Setup(
 		setupReorgsCount,
 		setupReorgDepth,
 		setupWalletBalance,
+		setupProbesSent,
+		setupProbesFailed,
+		setupProbesLanded,
+		setupProbesLatency,
 	} {
 		if err := setup(ctx); err != nil {
 			return err
@@ -144,5 +148,51 @@ func setupWalletBalance(ctx context.Context) error {
 		return err
 	}
 	WalletBalance = walletBalance
+	return nil
+}
+
+func setupProbesSent(ctx context.Context) error {
+	probesSent, err := meter.Int64Counter("probes_sent_count",
+		otelapi.WithDescription("count of sent probe transactions"),
+	)
+	if err != nil {
+		return err
+	}
+	ProbesSentCount = probesSent
+	return nil
+}
+
+func setupProbesFailed(ctx context.Context) error {
+	probesFailed, err := meter.Int64Counter("probes_failed_count",
+		otelapi.WithDescription("count of probe transactions we failed to send"),
+	)
+	if err != nil {
+		return err
+	}
+	ProbesFailedCount = probesFailed
+	return nil
+}
+
+func setupProbesLanded(ctx context.Context) error {
+	probesLanded, err := meter.Int64Counter("probes_landed_count",
+		otelapi.WithDescription("count of landed probe transactions"),
+	)
+	if err != nil {
+		return err
+	}
+	ProbesLandedCount = probesLanded
+	return nil
+}
+
+func setupProbesLatency(ctx context.Context) error {
+	probesLatency, err := meter.Int64Histogram("probes_latency",
+		otelapi.WithDescription("latency of landed probe transactions"),
+		otelapi.WithUnit("s"),
+		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64),
+	)
+	if err != nil {
+		return err
+	}
+	ProbesLatency = probesLatency
 	return nil
 }

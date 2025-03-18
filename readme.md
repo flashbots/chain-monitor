@@ -25,3 +25,28 @@ chain_monitor_wallet_balance{wallet_address="0xNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
 chain_monitor_wallet_balance{wallet_address="0xNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",wallet_name="proposer"} $$$
 chain_monitor_wallet_balance{wallet_address="0xNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",wallet_name="builder"} $$$
 ```
+
+## Usage
+
+```text
+   chain-monitor serve [command options]
+
+OPTIONS:
+   L1
+
+   --l1-monitor-wallets list [ --l1-monitor-wallets list ]  list of l1 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L1_MONITOR_WALLETS]
+   --l1-rpc url                                             url of l1 rpc endpoint (default: "http://127.0.0.1:8545") [$CHAIN_MONITOR_L1_RPC]
+
+   L2
+
+   --l2-block-time duration                                 average duration between consecutive blocks on l2 (default: 2s) [$CHAIN_MONITOR_L2_BLOCK_TIME]
+   --l2-builder-address address                             l2 builder address [$CHAIN_MONITOR_L2_BUILDER_ADDRESS]
+   --l2-monitor-private-key key                             l2 private key to send tx inclusion latency probes with [$CHAIN_MONITOR_L2_MONITOR_PRIVATE_KEY]
+   --l2-monitor-wallets list [ --l2-monitor-wallets list ]  list of l2 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLETS]
+   --l2-reorg-window duration                               max duration of block history to keep in memory for the l2 reorg adjustments (default: 24h0m0s) [$CHAIN_MONITOR_L2_REORG_WINDOW]
+   --l2-rpc url                                             url of l2 rpc endpoint (default: "http://127.0.0.1:8645") [$CHAIN_MONITOR_L2_RPC]
+
+   SERVER
+
+   --server-listen-address host:port  host:port for the server to listen on (default: "0.0.0.0:8080") [$CHAIN_MONITOR_SERVER_LISTEN_ADDRESS]
+```

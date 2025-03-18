@@ -15,4 +15,9 @@ var (
 	ReorgDepth  otelapi.Int64Gauge
 
 	WalletBalance otelapi.Float64ObservableGauge
+
+	ProbesSentCount   otelapi.Int64Counter
+	ProbesFailedCount otelapi.Int64Counter
+	ProbesLandedCount otelapi.Int64Counter
+	ProbesLatency     otelapi.Int64Histogram
 )
