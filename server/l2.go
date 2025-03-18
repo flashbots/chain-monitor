@@ -446,6 +446,9 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			metrics.ProbesFailedCount.Add(ctx, 1)
 			return
 		}
+
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.MonitorTxGasPriceAdjustment))
+		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
 	}
 
 	data := make([]byte, 8)

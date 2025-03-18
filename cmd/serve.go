@@ -76,6 +76,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       22000,
 		},
 
+		&cli.Int64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorTxGasPriceAdjustment,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_ADJUSTMENT"},
+			Name:        categoryL2 + "-monitor-tx-gas-price-adjustment",
+			Usage:       "l2 gas price adjustment in `percent` for monitor transactions",
+			Value:       10,
+		},
+
 		&cli.DurationFlag{
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.ReorgWindow,
