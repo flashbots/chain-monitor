@@ -456,7 +456,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		nonce,
 		ethcommon.Address{},
 		nil,
-		22000,
+		l2.cfg.MonitorTxGasLimit,
 		gasPrice,
 		data,
 	)

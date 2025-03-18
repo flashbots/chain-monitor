@@ -67,6 +67,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Usage:       "l2 private `key` to send tx inclusion latency probes with",
 		},
 
+		&cli.Uint64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorTxGasLimit,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_LIMIT"},
+			Name:        categoryL2 + "-monitor-tx-gas-limit",
+			Usage:       "l2 gas `limit` for monitor transactions",
+			Value:       22000,
+		},
+
 		&cli.DurationFlag{
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.ReorgWindow,
