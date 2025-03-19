@@ -43,6 +43,7 @@ OPTIONS:
    --l2-builder-address address                             l2 builder address [$CHAIN_MONITOR_L2_BUILDER_ADDRESS]
    --l2-monitor-private-key key                             l2 private key to send tx inclusion latency probes with [$CHAIN_MONITOR_L2_MONITOR_PRIVATE_KEY]
    --l2-monitor-tx-gas-limit limit                          l2 gas limit for monitor transactions (default: 22000) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_LIMIT]
+   --l2-monitor-tx-gas-price-adjustment percent             l2 gas price adjustment in percent for monitor transactions (default: 10) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_PRICE_ADJUSTMENT]
    --l2-monitor-wallets list [ --l2-monitor-wallets list ]  list of l2 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLETS]
    --l2-reorg-window duration                               max duration of block history to keep in memory for the l2 reorg adjustments (default: 24h0m0s) [$CHAIN_MONITOR_L2_REORG_WINDOW]
    --l2-rpc url                                             url of l2 rpc endpoint (default: "http://127.0.0.1:8645") [$CHAIN_MONITOR_L2_RPC]
