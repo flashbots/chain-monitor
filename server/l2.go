@@ -5,16 +5,17 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/flashbots/chain-monitor/config"
 	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
 	"github.com/flashbots/chain-monitor/types"
+	"github.com/flashbots/chain-monitor/utils"
 
 	"go.uber.org/zap"
 
@@ -506,41 +507,20 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		))
 	}
 
-	switch len(errs) {
-	default:
-		return errors.Join(errs...)
-	case 1:
-		return errs[0]
-	case 0:
-		return nil
-	}
+	return utils.FlattenErrors(errs)
 }
 
 func (l2 *L2) sendProbeTx(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
 	var (
+		data     = make([]byte, 8)
 		gasPrice *big.Int
 		nonce    uint64
 		err      error
 	)
 
-	{
-		_ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
-		nonce, err = l2.rpc.PendingNonceAt(_ctx, l2.monitorAddr)
-		if err != nil {
-			l.Error("Failed to get pending nonce for probe tx",
-				zap.Error(err),
-				zap.String("monitor_address", l2.monitorAddr.String()),
-			)
-			metrics.ProbesFailedCount.Add(ctx, 1)
-			return
-		}
-	}
-
-	{
+	{ // get the gas price
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
@@ -558,49 +538,85 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
 	}
 
-	data := make([]byte, 8)
-	nextBlock := time.Now().Add(l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
-	binary.BigEndian.PutUint64(data, uint64(nextBlock.Unix()))
-
-	tx := ethtypes.NewTransaction(
-		nonce,
-		ethcommon.Address{},
-		nil,
-		l2.cfg.MonitorTxGasLimit,
-		gasPrice,
-		data,
-	)
-
-	signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.monitorKey)
-	if err != nil {
-		l.Error("Failed to sign the probe tx",
-			zap.Error(err),
-			zap.String("monitor_address", l2.monitorAddr.String()),
-		)
-		metrics.ProbesFailedCount.Add(ctx, 1)
-		return
-	}
-
-	{
+	{ // get the nonce
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
-			if err.Error() != "replacement transaction underpriced" {
-				l.Error("Failed to send the probe tx",
-					zap.Error(err),
-					zap.String("monitor_address", l2.monitorAddr.String()),
-				)
-			}
+		nonce, err = l2.rpc.PendingNonceAt(_ctx, l2.monitorAddr)
+		if err != nil {
+			l.Error("Failed to get pending nonce for probe tx",
+				zap.Error(err),
+				zap.String("monitor_address", l2.monitorAddr.String()),
+			)
 			metrics.ProbesFailedCount.Add(ctx, 1)
 			return
 		}
 	}
 
-	l.Debug("Sent probe tx",
-		zap.String("from", l2.monitorAddr.String()),
-		zap.String("to", l2.builderAddr.String()),
-		zap.String("data", hex.EncodeToString(data)),
+	errs := make([]error, 0, 4)
+
+tryingNonces:
+	for nonceIncrement := uint64(0); nonceIncrement < 4; nonceIncrement++ {
+		nextBlock := time.Now().Add(l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
+		binary.BigEndian.PutUint64(data, uint64(nextBlock.Unix()))
+
+		tx := ethtypes.NewTransaction(
+			nonce+nonceIncrement,
+			ethcommon.Address{},
+			nil,
+			l2.cfg.MonitorTxGasLimit,
+			gasPrice,
+			data,
+		)
+
+		signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.monitorKey)
+		if err != nil {
+			l.Error("Failed to sign the probe tx",
+				zap.Error(err),
+				zap.String("monitor_address", l2.monitorAddr.String()),
+			)
+			metrics.ProbesFailedCount.Add(ctx, 1)
+			return
+		}
+
+		_ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
+			errs = append(errs,
+				fmt.Errorf("nonce %d (%d+%d): %w", nonce+nonceIncrement, nonce, nonceIncrement, err),
+			)
+
+			for _, msg := range []string{
+				"replacement transaction underpriced",
+				"nonce too low",
+			} {
+				if strings.HasPrefix(err.Error(), msg) {
+					continue tryingNonces // perhaps the next nonce will be a success
+				}
+			}
+
+			l.Error("Failed to send the probe tx",
+				zap.Error(utils.FlattenErrors(errs)),
+			)
+			metrics.ProbesFailedCount.Add(ctx, 1)
+
+			return // irrecoverable error (for now, at least) => no point in trying other nonces
+		}
+
+		metrics.ProbesSentCount.Add(ctx, 1)
+
+		l.Debug("Sent probe tx",
+			zap.String("from", l2.monitorAddr.String()),
+			zap.String("to", l2.builderAddr.String()),
+			zap.String("data", hex.EncodeToString(data)),
+		)
+
+		return // yay, sent the probe tx
+	}
+
+	l.Error("Failed to send the probe tx",
+		zap.Error(utils.FlattenErrors(errs)),
 	)
-	metrics.ProbesSentCount.Add(ctx, 1)
+	metrics.ProbesFailedCount.Add(ctx, 1)
 }

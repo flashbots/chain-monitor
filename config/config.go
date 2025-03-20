@@ -1,8 +1,9 @@
 package config
 
 import (
-	"errors"
 	"reflect"
+
+	"github.com/flashbots/chain-monitor/utils"
 )
 
 type Config struct {
@@ -68,12 +69,5 @@ func validate(item interface{}) error {
 		}
 	}
 
-	switch len(errs) {
-	default:
-		return errors.Join(errs...)
-	case 1:
-		return errs[0]
-	case 0:
-		return nil
-	}
+	return utils.FlattenErrors(errs)
 }

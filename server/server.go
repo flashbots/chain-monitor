@@ -19,6 +19,7 @@ import (
 	"github.com/flashbots/chain-monitor/httplogger"
 	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
+	"github.com/flashbots/chain-monitor/utils"
 )
 
 type Server struct {
@@ -155,14 +156,7 @@ func (s *Server) Run() error {
 		s.l2.rpc.Close()
 	}
 
-	switch len(errs) {
-	default:
-		return errors.Join(errs...)
-	case 1:
-		return errs[0]
-	case 0:
-		return nil
-	}
+	return utils.FlattenErrors(errs)
 }
 
 func (s *Server) observe(ctx context.Context, o otelapi.Observer) error {

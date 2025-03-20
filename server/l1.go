@@ -2,13 +2,13 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/flashbots/chain-monitor/config"
 	"github.com/flashbots/chain-monitor/metrics"
+	"github.com/flashbots/chain-monitor/utils"
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
 )
@@ -78,12 +78,5 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		))
 	}
 
-	switch len(errs) {
-	default:
-		return errors.Join(errs...)
-	case 1:
-		return errs[0]
-	case 0:
-		return nil
-	}
+	return utils.FlattenErrors(errs)
 }
