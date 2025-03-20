@@ -50,5 +50,6 @@ OPTIONS:
 
    SERVER
 
+   --server-enable-pprof              whether to enable pprof server (default: false) [$CHAIN_MONITOR_SERVER_ENABLE_PPROF]
    --server-listen-address host:port  host:port for the server to listen on (default: "0.0.0.0:8080") [$CHAIN_MONITOR_SERVER_LISTEN_ADDRESS]
 ```

@@ -7,6 +7,7 @@ import (
 )
 
 type Server struct {
+	EnablePprof   bool   `yaml:"enable_pprof"`
 	ListenAddress string `yaml:"listen_address"`
 }
 

@@ -113,6 +113,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	serverFlags := []cli.Flag{
+		&cli.BoolFlag{
+			Category:    strings.ToUpper(categoryServer),
+			Destination: &cfg.Server.EnablePprof,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryServer) + "_ENABLE_PPROF"},
+			Name:        categoryServer + "-enable-pprof",
+			Usage:       "whether to enable pprof server",
+			Value:       false,
+		},
+
 		&cli.StringFlag{
 			Category:    strings.ToUpper(categoryServer),
 			Destination: &cfg.Server.ListenAddress,

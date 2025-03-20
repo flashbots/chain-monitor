@@ -47,6 +47,8 @@ type L2 struct {
 	blocksMissed int64
 	blocksSeen   int64
 
+	processBlockFailuresCount uint
+
 	unwinding    bool
 	unwindHeight uint64
 }
@@ -182,7 +184,6 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	if err != nil {
 		l.Error("Failed to get block height, skipping this round...",
 			zap.Error(err),
-			zap.String("rpc", l2.cfg.RPC),
 		)
 		return
 	}
@@ -204,12 +205,21 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 		)
 
 		if err := l2.processBlock(ctx, b); err != nil {
-			l.Error("Failed to process block, skipping this round...",
+			l2.processBlockFailuresCount++
+
+			logLevel := zap.DebugLevel
+			if l2.processBlockFailuresCount > 10 {
+				logLevel = zap.WarnLevel
+			}
+
+			l.Log(logLevel, "Failed to process block, skipping this round...",
 				zap.Error(err),
 				zap.Uint64("block", blockHeight),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.Uint("failures_count", l2.processBlockFailuresCount),
 			)
 			return
+		} else {
+			l2.processBlockFailuresCount = 0
 		}
 		l2.blockHeight = b
 	}
@@ -234,26 +244,29 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 				)
 				l2.unwinding = true
 				l2.unwindHeight = l2.blockHeight
-				l2.unwindBackToCommonRoot(ctx)
-			} else {
-				l.Debug("Continuing the reorg unwind...",
-					zap.Uint64("block_number", blockNumber),
-				)
-				l2.unwindBackToCommonRoot(ctx)
+				return l2.unwindBackToCommonRoot(ctx)
 			}
-			return nil
-		} else if l2.unwinding {
+
+			l.Debug("Continuing the reorg unwind...",
+				zap.Uint64("block_number", blockNumber),
+			)
+			return l2.unwindBackToCommonRoot(ctx)
+		}
+
+		if l2.unwinding {
 			depth := l2.unwindHeight - blockNumber
 
 			metrics.ReorgsCount.Add(ctx, 1)
 			metrics.ReorgDepth.Record(ctx, int64(depth))
 
-			l2.unwinding = false
-			l2.unwindHeight = 0
-
 			l.Warn("Chain reorg detected via hash mismatch",
 				zap.Uint64("reorg_depth", depth),
+				zap.Uint64("old_block_number", l2.unwindHeight),
+				zap.Uint64("new_block_number", blockNumber),
 			)
+
+			l2.unwinding = false
+			l2.unwindHeight = 0
 		}
 	}
 
@@ -318,7 +331,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	return nil
 }
 
-func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) {
+func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) error {
 	l := logutils.LoggerFromContext(ctx)
 
 	defer func() {
@@ -334,6 +347,12 @@ func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) {
 			l2.blocksLanded--
 		} else {
 			l2.blocksMissed--
+			l.Info("Missed block was reorgd",
+				zap.Uint64("block_number", br.number.Uint64()),
+				zap.Int64("blocks_landed", l2.blocksLanded),
+				zap.Int64("blocks_missed", l2.blocksMissed),
+				zap.Int64("blocks_seen", l2.blocksSeen),
+			)
 		}
 
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
@@ -342,31 +361,39 @@ func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) {
 				zap.Error(err),
 				zap.Uint64("block", br.number.Uint64()),
 			)
-			return
+			return err
 		}
 		l2.blockHeight = br.number.Uint64() - 1
 
 		if block.Hash().Cmp(br.hash) == 0 {
-			return
+			return nil
 		}
 	}
+
+	return nil
 }
 
-func (l2 *L2) processReorg(ctx context.Context, lastCommonRootHeight uint64) {
+func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 	l := logutils.LoggerFromContext(ctx)
 
-	depth := l2.blockHeight - lastCommonRootHeight + 1
+	depth := l2.blockHeight - newBlockHeight + 1
 
 	adjustSeen := 0
 	adjustLanded := 0
 	adjustMissed := 0
-	for b := lastCommonRootHeight; b <= l2.blockHeight; b++ {
+	for b := newBlockHeight; b <= l2.blockHeight; b++ {
 		if br, ok := l2.blocks.At(int(b)); ok {
 			adjustSeen++
 			if br.landed {
 				adjustLanded++
 			} else {
 				adjustMissed++
+				l.Info("Missed block was reorgd",
+					zap.Uint64("block_number", b),
+					zap.Int64("blocks_landed", l2.blocksLanded-int64(adjustLanded)),
+					zap.Int64("blocks_missed", l2.blocksMissed-int64(adjustMissed)),
+					zap.Int64("blocks_seen", l2.blocksSeen-int64(adjustSeen)),
+				)
 			}
 		}
 	}
@@ -382,12 +409,14 @@ func (l2 *L2) processReorg(ctx context.Context, lastCommonRootHeight uint64) {
 	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
 	metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 
-	l2.blocks.Forget(adjustSeen)
-	l2.blockHeight = lastCommonRootHeight - 1
-
-	l.Warn("Chain reorg detected via block height",
+	l.Warn("Chain reorg detected via latest block height",
 		zap.Uint64("reorg_depth", depth),
+		zap.Uint64("old_block_number", l2.blockHeight),
+		zap.Uint64("new_block_number", newBlockHeight-1),
 	)
+
+	l2.blocks.Forget(adjustSeen)
+	l2.blockHeight = newBlockHeight - 1
 }
 
 func (l2 *L2) isBuilderTx(
@@ -420,7 +449,11 @@ func (l2 *L2) isBuilderTx(
 	return from.Cmp(l2.builderAddr) == 0
 }
 
-func (l2 *L2) isProbeTx(ctx context.Context, block *ethtypes.Block, tx *ethtypes.Transaction) (isProbeTx bool, sent, latency uint64) {
+func (l2 *L2) isProbeTx(
+	ctx context.Context,
+	block *ethtypes.Block,
+	tx *ethtypes.Transaction,
+) (isProbeTx bool, sent, latency uint64) {
 	if tx == nil || tx.To() == nil || tx.To().Cmp(ethcommon.Address{}) != 0 {
 		return false, 0, 0 // probe tx burns eth by sending 0 ETH to zero address
 	}
@@ -553,10 +586,12 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		defer cancel()
 
 		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
-			l.Error("Failed to send the probe tx",
-				zap.Error(err),
-				zap.String("monitor_address", l2.monitorAddr.String()),
-			)
+			if err.Error() != "replacement transaction underpriced" {
+				l.Error("Failed to send the probe tx",
+					zap.Error(err),
+					zap.String("monitor_address", l2.monitorAddr.String()),
+				)
+			}
 			metrics.ProbesFailedCount.Add(ctx, 1)
 			return
 		}
