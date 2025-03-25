@@ -50,8 +50,8 @@ type L2 struct {
 
 	processBlockFailuresCount uint
 
-	unwinding    bool
-	unwindHeight uint64
+	unwindingByHash    bool
+	unwindByHashHeight uint64
 }
 
 type blockRecord struct {
@@ -140,7 +140,9 @@ func newL2(cfg *config.L2) (*L2, error) {
 		if err != nil {
 			return nil, err
 		}
-		l2.blockHeight = blockHeight - 1
+		if blockHeight > 0 {
+			l2.blockHeight = blockHeight - 1
+		}
 		l2.blocks = types.NewRingBuffer[blockRecord](int(blockHeight), int(cfg.ReorgWindow/cfg.BlockTime+1))
 	}
 
@@ -197,7 +199,7 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	}
 
 	if blockHeight < l2.blockHeight {
-		l2.processReorg(ctx, blockHeight)
+		l2.processReorgByHeight(ctx, blockHeight)
 	}
 
 	for b := l2.blockHeight + 1; b <= blockHeight; b++ {
@@ -237,37 +239,41 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		return err
 	}
 
-	if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
-		if previous.hash.Cmp(block.ParentHash()) != 0 {
-			if !l2.unwinding {
-				l.Info("Chain reorg detected via hash mismatch, starting the unwind...",
+	if blockNumber > 0 {
+		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
+			if previous.hash.Cmp(block.ParentHash()) != 0 {
+				if !l2.unwindingByHash {
+					l.Info("Chain reorg detected via hash mismatch, starting the unwind...",
+						zap.Uint64("block_number", blockNumber),
+						zap.String("new_parent_hash", block.ParentHash().String()),
+						zap.String("old_parent_hash", previous.hash.String()),
+					)
+					l2.unwindingByHash = true
+					l2.unwindByHashHeight = l2.blockHeight
+					return l2.processReorgByHash(ctx)
+				}
+
+				l.Debug("Continuing the reorg unwind...",
 					zap.Uint64("block_number", blockNumber),
 				)
-				l2.unwinding = true
-				l2.unwindHeight = l2.blockHeight
-				return l2.unwindBackToCommonRoot(ctx)
+				return l2.processReorgByHash(ctx)
 			}
 
-			l.Debug("Continuing the reorg unwind...",
-				zap.Uint64("block_number", blockNumber),
-			)
-			return l2.unwindBackToCommonRoot(ctx)
-		}
+			if l2.unwindingByHash {
+				depth := l2.unwindByHashHeight - blockNumber
 
-		if l2.unwinding {
-			depth := l2.unwindHeight - blockNumber
+				metrics.ReorgsCount.Add(ctx, 1)
+				metrics.ReorgDepth.Record(ctx, int64(depth))
 
-			metrics.ReorgsCount.Add(ctx, 1)
-			metrics.ReorgDepth.Record(ctx, int64(depth))
+				l.Warn("Chain reorg detected via hash mismatch",
+					zap.Uint64("reorg_depth", depth),
+					zap.Uint64("old_block_number", l2.unwindByHashHeight),
+					zap.Uint64("new_block_number", blockNumber),
+				)
 
-			l.Warn("Chain reorg detected via hash mismatch",
-				zap.Uint64("reorg_depth", depth),
-				zap.Uint64("old_block_number", l2.unwindHeight),
-				zap.Uint64("new_block_number", blockNumber),
-			)
-
-			l2.unwinding = false
-			l2.unwindHeight = 0
+				l2.unwindingByHash = false
+				l2.unwindByHashHeight = 0
+			}
 		}
 	}
 
@@ -332,7 +338,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	return nil
 }
 
-func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) error {
+func (l2 *L2) processReorgByHash(ctx context.Context) error {
 	l := logutils.LoggerFromContext(ctx)
 
 	defer func() {
@@ -342,13 +348,13 @@ func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) error {
 	}()
 
 	for l2.blocks.Length() > 0 {
-		br, _ := l2.blocks.Pop()
+		br, _ := l2.blocks.Pick()
 		l2.blocksSeen--
 		if br.landed {
 			l2.blocksLanded--
 		} else {
 			l2.blocksMissed--
-			l.Info("Missed block was reorgd",
+			l.Info("Missed block was reorgd (hash)",
 				zap.Uint64("block_number", br.number.Uint64()),
 				zap.Int64("blocks_landed", l2.blocksLanded),
 				zap.Int64("blocks_missed", l2.blocksMissed),
@@ -374,22 +380,27 @@ func (l2 *L2) unwindBackToCommonRoot(ctx context.Context) error {
 	return nil
 }
 
-func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
+func (l2 *L2) processReorgByHeight(ctx context.Context, newBlockHeight uint64) {
 	l := logutils.LoggerFromContext(ctx)
+
+	if newBlockHeight == 0 {
+		newBlockHeight = 1
+	}
 
 	depth := l2.blockHeight - newBlockHeight + 1
 
 	adjustSeen := 0
 	adjustLanded := 0
 	adjustMissed := 0
-	for b := newBlockHeight; b <= l2.blockHeight; b++ {
-		if br, ok := l2.blocks.At(int(b)); ok {
+
+	for b := l2.blockHeight; b >= newBlockHeight && l2.blocks.Length() > 0; b-- {
+		if br, ok := l2.blocks.Pick(); ok {
 			adjustSeen++
 			if br.landed {
 				adjustLanded++
 			} else {
 				adjustMissed++
-				l.Info("Missed block was reorgd",
+				l.Info("Missed block was reorgd (height)",
 					zap.Uint64("block_number", b),
 					zap.Int64("blocks_landed", l2.blocksLanded-int64(adjustLanded)),
 					zap.Int64("blocks_missed", l2.blocksMissed-int64(adjustMissed)),
@@ -410,7 +421,7 @@ func (l2 *L2) processReorg(ctx context.Context, newBlockHeight uint64) {
 	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
 	metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 
-	l.Warn("Chain reorg detected via latest block height",
+	l.Warn("Chain reorg detected via block height",
 		zap.Uint64("reorg_depth", depth),
 		zap.Uint64("old_block_number", l2.blockHeight),
 		zap.Uint64("new_block_number", newBlockHeight-1),
@@ -590,6 +601,7 @@ tryingNonces:
 			for _, msg := range []string{
 				"replacement transaction underpriced",
 				"nonce too low",
+				"already known",
 			} {
 				if strings.HasPrefix(err.Error(), msg) {
 					continue tryingNonces // perhaps the next nonce will be a success

@@ -88,6 +88,20 @@ func (b *RingBuffer[T]) Pop() (T, bool) {
 	return v, true
 }
 
+func (b *RingBuffer[T]) Pick() (T, bool) {
+	if b.head == b.tail {
+		var res T // nil value
+		return res, false
+	}
+
+	b.head--
+	if b.head < 0 {
+		b.head += len(b.buf)
+	}
+
+	return b.buf[b.head], true
+}
+
 func (b *RingBuffer[T]) Forget(count int) {
 	if count >= b.Length() {
 		b.head = 0
