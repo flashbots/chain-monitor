@@ -553,7 +553,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		nonce, err = l2.rpc.PendingNonceAt(_ctx, l2.monitorAddr)
+		nonce, err = l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
 		if err != nil {
 			l.Error("Failed to get pending nonce for probe tx",
 				zap.Error(err),
@@ -564,10 +564,10 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		}
 	}
 
-	errs := make([]error, 0, 4)
+	errs := make([]error, 0, 8)
 
 tryingNonces:
-	for nonceIncrement := uint64(0); nonceIncrement < 4; nonceIncrement++ {
+	for nonceIncrement := uint64(0); nonceIncrement < 8; nonceIncrement++ {
 		nextBlock := time.Now().Add(l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
 		binary.BigEndian.PutUint64(data, uint64(nextBlock.Unix()))
 

@@ -152,7 +152,8 @@ func (s *Server) Run() error {
 		}
 	}
 
-	{ // close the rpc client
+	{ // close the rpc clients
+		s.l1.rpc.Close()
 		s.l2.rpc.Close()
 	}
 
