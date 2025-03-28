@@ -202,7 +202,7 @@ func setupProbesLatency(ctx context.Context) error {
 func setupTxPerBlock(ctx context.Context) error {
 	m, err := meter.Int64Histogram("tx_per_block",
 		otelapi.WithDescription("count of transactions in a block"),
-		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 4, 8, 16, 32, 64, 128, 256),
+		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 92, 128, 184, 256),
 	)
 	if err != nil {
 		return err
