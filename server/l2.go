@@ -239,6 +239,9 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		return err
 	}
 
+	metrics.TxPerBlock.Record(ctx, int64(len(block.Transactions())))
+	metrics.GasPerBlock.Record(ctx, int64(block.GasUsed()))
+
 	if blockNumber > 0 {
 		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
 			if previous.hash.Cmp(block.ParentHash()) != 0 {
@@ -547,6 +550,8 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 
 		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.MonitorTxGasPriceAdjustment))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
+
+		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.MonitorTxGasPriceCap))
 	}
 
 	{ // get the nonce

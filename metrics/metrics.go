@@ -34,6 +34,8 @@ func Setup(
 		setupProbesFailed,
 		setupProbesLanded,
 		setupProbesLatency,
+		setupTxPerBlock,
+		setupGasPerBlock,
 	} {
 		if err := setup(ctx); err != nil {
 			return err
@@ -75,124 +77,148 @@ func setupMeter(ctx context.Context) error {
 }
 
 func setupBlockMissed(ctx context.Context) error {
-	blockMissed, err := meter.Int64Gauge("block_missed",
+	m, err := meter.Int64Gauge("block_missed",
 		otelapi.WithDescription("height of the most recent missed block"),
 	)
 	if err != nil {
 		return err
 	}
-	BlockMissed = blockMissed
+	BlockMissed = m
 	return nil
 }
 
 func setupBlocksLandedCount(ctx context.Context) error {
-	blocksLanded, err := meter.Int64Gauge("blocks_landed_count",
+	m, err := meter.Int64Gauge("blocks_landed_count",
 		otelapi.WithDescription("blocks landed by our builder"),
 	)
 	if err != nil {
 		return err
 	}
-	BlocksLandedCount = blocksLanded
+	BlocksLandedCount = m
 	return nil
 }
 
 func setupBlocksMissedCount(ctx context.Context) error {
-	blocksMissed, err := meter.Int64Gauge("blocks_missed_count",
+	m, err := meter.Int64Gauge("blocks_missed_count",
 		otelapi.WithDescription("blocks missed by our builder"),
 	)
 	if err != nil {
 		return err
 	}
-	BlocksMissedCount = blocksMissed
+	BlocksMissedCount = m
 	return nil
 }
 
 func setupBlocksSeenCount(ctx context.Context) error {
-	blocksSeen, err := meter.Int64Gauge("blocks_seen_count",
+	m, err := meter.Int64Gauge("blocks_seen_count",
 		otelapi.WithDescription("blocks seen by the monitor"),
 	)
 	if err != nil {
 		return err
 	}
-	BlocksSeenCount = blocksSeen
+	BlocksSeenCount = m
 	return nil
 }
 
 func setupReorgsCount(ctx context.Context) error {
-	reorgCount, err := meter.Int64Counter("reorgs_count",
+	m, err := meter.Int64Counter("reorgs_count",
 		otelapi.WithDescription("chain reorgs count"),
 	)
 	if err != nil {
 		return err
 	}
-	ReorgsCount = reorgCount
+	ReorgsCount = m
 	return nil
 }
 
 func setupReorgDepth(ctx context.Context) error {
-	reorgDepth, err := meter.Int64Gauge("reorg_depth",
+	m, err := meter.Int64Gauge("reorg_depth",
 		otelapi.WithDescription("depth of the most recent reorg"),
 	)
 	if err != nil {
 		return err
 	}
-	ReorgDepth = reorgDepth
+	ReorgDepth = m
 	return nil
 }
 
 func setupWalletBalance(ctx context.Context) error {
-	walletBalance, err := meter.Float64ObservableGauge("wallet_balance",
+	m, err := meter.Float64ObservableGauge("wallet_balance",
 		otelapi.WithDescription("wallet balance"),
 	)
 	if err != nil {
 		return err
 	}
-	WalletBalance = walletBalance
+	WalletBalance = m
 	return nil
 }
 
 func setupProbesSent(ctx context.Context) error {
-	probesSent, err := meter.Int64Counter("probes_sent_count",
+	m, err := meter.Int64Counter("probes_sent_count",
 		otelapi.WithDescription("count of sent probe transactions"),
 	)
 	if err != nil {
 		return err
 	}
-	ProbesSentCount = probesSent
+	ProbesSentCount = m
 	return nil
 }
 
 func setupProbesFailed(ctx context.Context) error {
-	probesFailed, err := meter.Int64Counter("probes_failed_count",
+	m, err := meter.Int64Counter("probes_failed_count",
 		otelapi.WithDescription("count of probe transactions we failed to send"),
 	)
 	if err != nil {
 		return err
 	}
-	ProbesFailedCount = probesFailed
+	ProbesFailedCount = m
 	return nil
 }
 
 func setupProbesLanded(ctx context.Context) error {
-	probesLanded, err := meter.Int64Counter("probes_landed_count",
+	m, err := meter.Int64Counter("probes_landed_count",
 		otelapi.WithDescription("count of landed probe transactions"),
 	)
 	if err != nil {
 		return err
 	}
-	ProbesLandedCount = probesLanded
+	ProbesLandedCount = m
 	return nil
 }
 
 func setupProbesLatency(ctx context.Context) error {
-	probesLatency, err := meter.Int64Histogram("probes_latency",
+	m, err := meter.Int64Histogram("probes_latency",
 		otelapi.WithDescription("latency of landed probe transactions"),
 		otelapi.WithUnit("s"),
-		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64),
+		otelapi.WithExplicitBucketBoundaries(0, 1, 4, 16, 64, 256),
 	)
 	if err != nil {
 		return err
 	}
-	ProbesLatency = probesLatency
+	ProbesLatency = m
+	return nil
+}
+
+func setupTxPerBlock(ctx context.Context) error {
+	m, err := meter.Int64Histogram("tx_per_block",
+		otelapi.WithDescription("count of transactions in a block"),
+		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 4, 8, 16, 32, 64, 128, 256),
+	)
+	if err != nil {
+		return err
+	}
+	TxPerBlock = m
+	return nil
+}
+
+func setupGasPerBlock(ctx context.Context) error {
+	m, err := meter.Int64Histogram("gas_per_block",
+		otelapi.WithDescription("gas per a block"),
+		otelapi.WithExplicitBucketBoundaries(0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000),
+	)
+	if err != nil {
+		return err
+	}
+	GasPerBlock = m
 	return nil
 }

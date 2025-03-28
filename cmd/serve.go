@@ -72,8 +72,8 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Destination: &cfg.L2.MonitorTxGasLimit,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_LIMIT"},
 			Name:        categoryL2 + "-monitor-tx-gas-limit",
-			Usage:       "l2 gas `limit` for monitor transactions",
-			Value:       22000,
+			Usage:       "l2 monitor transactions gas `limit`",
+			Value:       1000000,
 		},
 
 		&cli.Int64Flag{
@@ -81,7 +81,16 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Destination: &cfg.L2.MonitorTxGasPriceAdjustment,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_ADJUSTMENT"},
 			Name:        categoryL2 + "-monitor-tx-gas-price-adjustment",
-			Usage:       "l2 gas price adjustment in `percent` for monitor transactions",
+			Usage:       "l2 monitor transactions gas price adjustment in `%`",
+			Value:       10,
+		},
+
+		&cli.Int64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorTxGasPriceCap,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_CAP"},
+			Name:        categoryL2 + "-monitor-tx-gas-price-cap",
+			Usage:       "l2 monitor transactions gas price cap in `wei`",
 			Value:       10,
 		},
 

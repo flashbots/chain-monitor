@@ -20,4 +20,7 @@ var (
 	ProbesFailedCount otelapi.Int64Counter
 	ProbesLandedCount otelapi.Int64Counter
 	ProbesLatency     otelapi.Int64Histogram
+
+	TxPerBlock  otelapi.Int64Histogram
+	GasPerBlock otelapi.Int64Histogram
 )

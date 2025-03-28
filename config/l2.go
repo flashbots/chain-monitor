@@ -11,14 +11,17 @@ import (
 )
 
 type L2 struct {
-	BlockTime                   time.Duration     `yaml:"block_time"`
-	BuilderAddress              string            `yaml:"builder_address"`
-	MonitorPrivateKey           string            `yaml:"monitor_private_key"`
-	MonitorTxGasLimit           uint64            `yaml:"monitor_tx_gas_limit"`
-	MonitorTxGasPriceAdjustment int64             `yaml:"monitor_tx_gas_price_adjustment"`
-	ReorgWindow                 time.Duration     `yaml:"reorg_window"`
-	RPC                         string            `yaml:"rpc"`
-	WalletAddresses             map[string]string `yaml:"wallet_addresses"`
+	BlockTime   time.Duration `yaml:"block_time"`
+	ReorgWindow time.Duration `yaml:"reorg_window"`
+	RPC         string        `yaml:"rpc"`
+
+	BuilderAddress  string            `yaml:"builder_address"`
+	WalletAddresses map[string]string `yaml:"wallet_addresses"`
+
+	MonitorPrivateKey           string `yaml:"monitor_private_key"`
+	MonitorTxGasLimit           uint64 `yaml:"monitor_tx_gas_limit"`
+	MonitorTxGasPriceAdjustment int64  `yaml:"monitor_tx_gas_price_adjustment"`
+	MonitorTxGasPriceCap        int64  `yaml:"monitor_tx_gas_price_cap"`
 }
 
 const (
