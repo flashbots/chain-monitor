@@ -610,6 +610,11 @@ tryingNonces:
 
 			l.Error("Failed to send the probe tx",
 				zap.Error(utils.FlattenErrors(errs)),
+				zap.String("from", l2.monitorAddr.String()),
+				zap.String("to", l2.builderAddr.String()),
+				zap.String("data", hex.EncodeToString(data)),
+				zap.String("gas_price", gasPrice.String()),
+				zap.Uint64("gas_limit", l2.cfg.MonitorTxGasLimit),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1)
 
