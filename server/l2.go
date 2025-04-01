@@ -494,8 +494,16 @@ func (l2 *L2) isProbeTx(
 		return false, 0, 0
 	}
 
+	blockTime := block.Time()
 	sent = binary.BigEndian.Uint64(tx.Data())
-	latency = block.Time() - sent - 1
+	if blockTime < sent {
+		l := logutils.LoggerFromContext(ctx)
+		l.Warn("Monitoring transaction from future",
+			zap.String("tx", tx.Hash().Hex()),
+			zap.String("block", block.Number().String()),
+		)
+	}
+	latency = blockTime - sent
 
 	return true, sent, latency
 }
@@ -573,8 +581,8 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 
 tryingNonces:
 	for nonceIncrement := uint64(0); nonceIncrement < 8; nonceIncrement++ {
-		nextBlock := time.Now().Add(l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
-		binary.BigEndian.PutUint64(data, uint64(nextBlock.Unix()))
+		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
+		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
 
 		tx := ethtypes.NewTransaction(
 			nonce+nonceIncrement,
