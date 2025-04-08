@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"slices"
@@ -126,12 +125,18 @@ func newL2(cfg *config.L2) (*L2, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		l.Debug("Requesting network id",
+		l.Debug("Requesting network id...",
 			zap.String("kind", "l2"),
 			zap.String("rpc", cfg.RPC),
 		)
 		chainID, err := l2.rpc.NetworkID(ctx)
-		if err != nil {
+		if err == nil {
+			l.Debug("Requested network id",
+				zap.String("network_id", chainID.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", cfg.RPC),
+			)
+		} else {
 			l.Error("Failed to request network id",
 				zap.Error(err),
 				zap.String("kind", "l2"),
@@ -148,13 +153,19 @@ func newL2(cfg *config.L2) (*L2, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		l.Debug("Requesting block height",
+		l.Debug("Requesting block number...",
 			zap.String("kind", "l2"),
 			zap.String("rpc", cfg.RPC),
 		)
 		blockHeight, err := l2.rpc.BlockNumber(ctx)
-		if err != nil {
-			l.Error("Failed to request block height",
+		if err == nil {
+			l.Debug("Requested block number",
+				zap.Uint64("block_number", blockHeight),
+				zap.String("kind", "l2"),
+				zap.String("rpc", cfg.RPC),
+			)
+		} else {
+			l.Error("Failed to request block number",
 				zap.Error(err),
 				zap.String("kind", "l2"),
 				zap.String("rpc", cfg.RPC),
@@ -205,12 +216,18 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 
-	l.Debug("Requesting block number",
+	l.Debug("Requesting block number...",
 		zap.String("kind", "l2"),
 		zap.String("rpc", l2.cfg.RPC),
 	)
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
-	if err != nil {
+	if err == nil {
+		l.Debug("Requested block number",
+			zap.Uint64("block_number", blockHeight),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
+	} else {
 		l.Error("Failed to request block number, skipping this round...",
 			zap.Error(err),
 			zap.String("kind", "l2"),
@@ -262,13 +279,20 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 
-	l.Debug("Requesting block by number",
+	l.Debug("Requesting block by number...",
 		zap.Uint64("number", blockNumber),
 		zap.String("kind", "l2"),
 		zap.String("rpc", l2.cfg.RPC),
 	)
 	block, err := l2.rpc.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-	if err != nil {
+	if err == nil {
+		l.Debug("Requested block by number",
+			zap.String("block_hash", block.Hash().String()),
+			zap.Uint64("number", blockNumber),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
+	} else {
 		l.Error("Failed to request block by number",
 			zap.Error(err),
 			zap.Uint64("number", blockNumber),
@@ -407,13 +431,20 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting block by number",
+		l.Debug("Requesting block by number...",
 			zap.String("number", br.number.String()),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
-		if err != nil {
+		if err == nil {
+			l.Debug("Requested block by number",
+				zap.String("block_hash", block.Hash().String()),
+				zap.String("number", br.number.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
+		} else {
 			l.Error("Failed to request block by number, skipping this round of unwind...",
 				zap.Error(err),
 				zap.String("number", br.number.String()),
@@ -566,13 +597,20 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting balance",
+		l.Debug("Requesting balance...",
 			zap.String("at", addr.String()),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
 		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
-		if err != nil {
+		if err == nil {
+			l.Debug("Requested balance",
+				zap.String("balance", _balance.String()),
+				zap.String("at", addr.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
+		} else {
 			l.Error("Failed to request balance",
 				zap.Error(err),
 				zap.String("at", addr.String()),
@@ -608,12 +646,18 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting suggested gas price",
+		l.Debug("Requesting suggested gas price...",
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
 		gasPrice, err = l2.rpc.SuggestGasPrice(_ctx)
-		if err != nil {
+		if err == nil {
+			l.Debug("Requested suggested gas price",
+				zap.String("gas_price", gasPrice.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
+		} else {
 			l.Error("Failed to request suggested gas price",
 				zap.Error(err),
 				zap.String("kind", "l2"),
@@ -633,13 +677,20 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting nonce",
+		l.Debug("Requesting nonce...",
 			zap.String("at", l2.monitorAddr.String()),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
 		nonce, err = l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
-		if err != nil {
+		if err == nil {
+			l.Debug("Requested nonce",
+				zap.Uint64("nonce", nonce),
+				zap.String("at", l2.monitorAddr.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
+		} else {
 			l.Error("Failed request nonce",
 				zap.Error(err),
 				zap.String("at", l2.monitorAddr.String()),
@@ -669,7 +720,7 @@ tryingNonces:
 
 		signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.monitorKey)
 		if err != nil {
-			l.Error("Failed to sign the probe tx",
+			l.Error("Failed to sign a transaction",
 				zap.Error(err),
 				zap.String("monitor_address", l2.monitorAddr.String()),
 			)
@@ -680,14 +731,22 @@ tryingNonces:
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Sending transaction",
+		l.Debug("Sending a transaction...",
 			zap.String("from", l2.monitorAddr.String()),
 			zap.String("to", tx.To().String()),
 			zap.Uint64("nonce", nonce+nonceIncrement),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
+		if err := l2.rpc.SendTransaction(_ctx, signedTx); err == nil {
+			l.Debug("Sent a transaction",
+				zap.String("from", l2.monitorAddr.String()),
+				zap.String("to", tx.To().String()),
+				zap.Uint64("nonce", nonce+nonceIncrement),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
+		} else {
 			errs = append(errs,
 				fmt.Errorf("nonce %d (%d+%d): %w", nonce+nonceIncrement, nonce, nonceIncrement, err),
 			)
@@ -702,13 +761,13 @@ tryingNonces:
 				}
 			}
 
-			l.Error("Failed to send the probe tx",
+			l.Error("Failed to send a transaction",
 				zap.Error(utils.FlattenErrors(errs)),
 				zap.String("from", l2.monitorAddr.String()),
-				zap.String("to", l2.builderAddr.String()),
-				zap.String("data", hex.EncodeToString(data)),
-				zap.String("gas_price", gasPrice.String()),
-				zap.Uint64("gas_limit", l2.cfg.MonitorTxGasLimit),
+				zap.String("to", tx.To().String()),
+				zap.Uint64("nonce", nonce+nonceIncrement),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1)
 
@@ -717,25 +776,15 @@ tryingNonces:
 
 		metrics.ProbesSentCount.Add(ctx, 1)
 
-		l.Debug("Sent probe tx",
-			zap.String("hash", tx.Hash().String()),
-			zap.String("from", l2.monitorAddr.String()),
-			zap.String("to", l2.builderAddr.String()),
-			zap.String("data", hex.EncodeToString(data)),
-			zap.String("gas_price", gasPrice.String()),
-			zap.Uint64("gas_limit", l2.cfg.MonitorTxGasLimit),
-		)
-
 		return // yay, sent the probe tx
 	}
 
-	l.Error("Failed to send the probe tx",
+	l.Error("Failed to send a transaction",
 		zap.Error(utils.FlattenErrors(errs)),
 		zap.String("from", l2.monitorAddr.String()),
 		zap.String("to", l2.builderAddr.String()),
-		zap.String("data", hex.EncodeToString(data)),
-		zap.String("gas_price", gasPrice.String()),
-		zap.Uint64("gas_limit", l2.cfg.MonitorTxGasLimit),
+		zap.String("kind", "l2"),
+		zap.String("rpc", l2.cfg.RPC),
 	)
 	metrics.ProbesFailedCount.Add(ctx, 1)
 }
