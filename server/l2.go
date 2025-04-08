@@ -185,16 +185,14 @@ func newL2(cfg *config.L2) (*L2, error) {
 func (l2 *L2) run(ctx context.Context) {
 	tick := func() {}
 
-	if l2.builderAddr.Cmp(ethcommon.Address{}) != 0 {
-		if l2.monitorKey != nil {
-			tick = func() {
-				l2.processNewBlocks(ctx)
-				l2.sendProbeTx(ctx)
-			}
-		} else {
-			tick = func() {
-				l2.processNewBlocks(ctx)
-			}
+	if l2.monitorKey != nil {
+		tick = func() {
+			l2.processNewBlocks(ctx)
+			l2.sendProbeTx(ctx)
+		}
+	} else {
+		tick = func() {
+			l2.processNewBlocks(ctx)
 		}
 	}
 
@@ -228,7 +226,7 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 			zap.String("rpc", l2.cfg.RPC),
 		)
 	} else {
-		l.Error("Failed to request block number, skipping this round...",
+		l.Warn("Failed to request block number, skipping this round...",
 			zap.Error(err),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
@@ -293,7 +291,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			zap.String("rpc", l2.cfg.RPC),
 		)
 	} else {
-		l.Error("Failed to request block by number",
+		l.Warn("Failed to request block by number",
 			zap.Error(err),
 			zap.Uint64("number", blockNumber),
 			zap.String("kind", "l2"),
@@ -445,7 +443,7 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 				zap.String("rpc", l2.cfg.RPC),
 			)
 		} else {
-			l.Error("Failed to request block by number, skipping this round of unwind...",
+			l.Warn("Failed to request block by number, skipping this round of unwind...",
 				zap.Error(err),
 				zap.String("number", br.number.String()),
 				zap.String("kind", "l2"),
@@ -611,7 +609,7 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 				zap.String("rpc", l2.cfg.RPC),
 			)
 		} else {
-			l.Error("Failed to request balance",
+			l.Warn("Failed to request balance",
 				zap.Error(err),
 				zap.String("at", addr.String()),
 				zap.String("kind", "l2"),
@@ -658,7 +656,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.String("rpc", l2.cfg.RPC),
 			)
 		} else {
-			l.Error("Failed to request suggested gas price",
+			l.Warn("Failed to request suggested gas price",
 				zap.Error(err),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.RPC),
@@ -691,7 +689,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.String("rpc", l2.cfg.RPC),
 			)
 		} else {
-			l.Error("Failed request nonce",
+			l.Warn("Failed request nonce",
 				zap.Error(err),
 				zap.String("at", l2.monitorAddr.String()),
 				zap.String("kind", "l2"),
