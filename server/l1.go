@@ -8,10 +8,12 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/flashbots/chain-monitor/config"
+	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
 	"github.com/flashbots/chain-monitor/utils"
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
 )
 
 type L1 struct {
@@ -62,11 +64,19 @@ func (l1 *L1) stop() {
 }
 
 func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
+	l := logutils.LoggerFromContext(ctx)
+
 	errs := make([]error, 0)
 
 	for name, addr := range l1.wallets {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
+
+		l.Debug("Requesting balance",
+			zap.String("at", addr.String()),
+			zap.String("kind", "l1"),
+			zap.String("rpc", l1.cfg.RPC),
+		)
 
 		_balance, err := l1.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {

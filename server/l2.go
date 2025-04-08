@@ -61,6 +61,8 @@ type blockRecord struct {
 }
 
 func newL2(cfg *config.L2) (*L2, error) {
+	l := zap.L()
+
 	l2 := &L2{
 		cfg:         cfg,
 		reorgWindow: int(cfg.ReorgWindow/cfg.BlockTime) + 1,
@@ -124,6 +126,11 @@ func newL2(cfg *config.L2) (*L2, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
+		l.Debug("Requesting network id",
+			zap.String("kind", "l2"),
+			zap.String("rpc", cfg.RPC),
+		)
+
 		chainID, err := l2.rpc.NetworkID(ctx)
 		if err != nil {
 			return nil, err
@@ -135,6 +142,11 @@ func newL2(cfg *config.L2) (*L2, error) {
 	{ // blocks, blockHeight
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
+
+		l.Debug("Requesting block height",
+			zap.String("kind", "l2"),
+			zap.String("rpc", cfg.RPC),
+		)
 
 		blockHeight, err := l2.rpc.BlockNumber(ctx)
 		if err != nil {
@@ -182,6 +194,11 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
+
+	l.Debug("Requesting block number",
+		zap.String("kind", "l2"),
+		zap.String("rpc", l2.cfg.RPC),
+	)
 
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
 	if err != nil {
@@ -233,6 +250,12 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
+
+	l.Debug("Requesting block by number",
+		zap.Uint64("number", blockNumber),
+		zap.String("kind", "l2"),
+		zap.String("rpc", l2.cfg.RPC),
+	)
 
 	block, err := l2.rpc.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
@@ -367,6 +390,12 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
+
+		l.Debug("Requesting block by number",
+			zap.String("number", br.number.String()),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
 		if err != nil {
@@ -512,11 +541,19 @@ func (l2 *L2) isProbeTx(
 }
 
 func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
+	l := logutils.LoggerFromContext(ctx)
+
 	errs := make([]error, 0)
 
 	for name, addr := range l2.wallets {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
+
+		l.Debug("Requesting balance",
+			zap.String("at", addr.String()),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 
 		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {
@@ -549,6 +586,11 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
+		l.Debug("Requesting suggested gas price",
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
+
 		gasPrice, err = l2.rpc.SuggestGasPrice(_ctx)
 		if err != nil {
 			l.Error("Failed to get suggested gas price for probe tx",
@@ -568,6 +610,12 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 	{ // get the nonce
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
+
+		l.Debug("Requesting nonce",
+			zap.String("at", l2.monitorAddr.String()),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 
 		nonce, err = l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
 		if err != nil {
@@ -608,6 +656,14 @@ tryingNonces:
 
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
+
+		l.Debug("Sending transaction",
+			zap.String("from", l2.monitorAddr.String()),
+			zap.String("to", tx.To().String()),
+			zap.Uint64("nonce", nonce+nonceIncrement),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 
 		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
 			errs = append(errs,
