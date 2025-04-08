@@ -80,6 +80,12 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 
 		_balance, err := l1.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {
+			l.Error("Failed to request balance",
+				zap.Error(err),
+				zap.String("at", addr.String()),
+				zap.String("kind", "l1"),
+				zap.String("rpc", l1.cfg.RPC),
+			)
 			errs = append(errs, err)
 			continue
 		}

@@ -130,11 +130,16 @@ func newL2(cfg *config.L2) (*L2, error) {
 			zap.String("kind", "l2"),
 			zap.String("rpc", cfg.RPC),
 		)
-
 		chainID, err := l2.rpc.NetworkID(ctx)
 		if err != nil {
+			l.Error("Failed to request network id",
+				zap.Error(err),
+				zap.String("kind", "l2"),
+				zap.String("rpc", cfg.RPC),
+			)
 			return nil, err
 		}
+
 		l2.chainID = chainID
 		l2.signer = ethtypes.NewEIP155Signer(chainID)
 	}
@@ -147,11 +152,16 @@ func newL2(cfg *config.L2) (*L2, error) {
 			zap.String("kind", "l2"),
 			zap.String("rpc", cfg.RPC),
 		)
-
 		blockHeight, err := l2.rpc.BlockNumber(ctx)
 		if err != nil {
+			l.Error("Failed to request block height",
+				zap.Error(err),
+				zap.String("kind", "l2"),
+				zap.String("rpc", cfg.RPC),
+			)
 			return nil, err
 		}
+
 		if blockHeight > 0 {
 			l2.blockHeight = blockHeight - 1
 		}
@@ -199,11 +209,12 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 		zap.String("kind", "l2"),
 		zap.String("rpc", l2.cfg.RPC),
 	)
-
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
 	if err != nil {
-		l.Error("Failed to get block height, skipping this round...",
+		l.Error("Failed to request block number, skipping this round...",
 			zap.Error(err),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
 		)
 		return
 	}
@@ -256,9 +267,14 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		zap.String("kind", "l2"),
 		zap.String("rpc", l2.cfg.RPC),
 	)
-
 	block, err := l2.rpc.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
+		l.Error("Failed to request block by number",
+			zap.Error(err),
+			zap.Uint64("number", blockNumber),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 		return err
 	}
 
@@ -396,12 +412,13 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
 		if err != nil {
-			l.Error("Failed to unwind back to common root, skipping this round...",
+			l.Error("Failed to request block by number, skipping this round of unwind...",
 				zap.Error(err),
-				zap.Uint64("block", br.number.Uint64()),
+				zap.String("number", br.number.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
 			)
 			return err
 		}
@@ -554,9 +571,14 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-
 		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {
+			l.Error("Failed to request balance",
+				zap.Error(err),
+				zap.String("at", addr.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
+			)
 			errs = append(errs, err)
 			continue
 		}
@@ -590,12 +612,12 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-
 		gasPrice, err = l2.rpc.SuggestGasPrice(_ctx)
 		if err != nil {
-			l.Error("Failed to get suggested gas price for probe tx",
+			l.Error("Failed to request suggested gas price",
 				zap.Error(err),
-				zap.String("monitor_address", l2.monitorAddr.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1)
 			return
@@ -616,12 +638,13 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-
 		nonce, err = l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
 		if err != nil {
-			l.Error("Failed to get pending nonce for probe tx",
+			l.Error("Failed request nonce",
 				zap.Error(err),
-				zap.String("monitor_address", l2.monitorAddr.String()),
+				zap.String("at", l2.monitorAddr.String()),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.RPC),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1)
 			return
@@ -664,7 +687,6 @@ tryingNonces:
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.RPC),
 		)
-
 		if err := l2.rpc.SendTransaction(_ctx, signedTx); err != nil {
 			errs = append(errs,
 				fmt.Errorf("nonce %d (%d+%d): %w", nonce+nonceIncrement, nonce, nonceIncrement, err),
