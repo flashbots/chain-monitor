@@ -365,6 +365,9 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 			)
 		}
 
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
 		if err != nil {
 			l.Error("Failed to unwind back to common root, skipping this round...",
