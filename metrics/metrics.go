@@ -2,7 +2,9 @@ package metrics
 
 import (
 	"context"
+	"math"
 
+	"github.com/flashbots/chain-monitor/config"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	otelapi "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -19,9 +21,10 @@ var (
 
 func Setup(
 	ctx context.Context,
+	cfg *config.Monitor,
 	observe func(ctx context.Context, o otelapi.Observer) error,
 ) error {
-	for _, setup := range []func(context.Context) error{
+	for _, setup := range []func(context.Context, *config.Monitor) error{
 		setupMeter, // must come first
 		setupBlockMissed,
 		setupBlocksLandedCount,
@@ -36,8 +39,9 @@ func Setup(
 		setupProbesLatency,
 		setupTxPerBlock,
 		setupGasPerBlock,
+		setupGasPrice,
 	} {
-		if err := setup(ctx); err != nil {
+		if err := setup(ctx, cfg); err != nil {
 			return err
 		}
 	}
@@ -52,7 +56,7 @@ func Setup(
 	return nil
 }
 
-func setupMeter(ctx context.Context) error {
+func setupMeter(ctx context.Context, _ *config.Monitor) error {
 	res, err := resource.New(ctx)
 	if err != nil {
 		return err
@@ -76,7 +80,7 @@ func setupMeter(ctx context.Context) error {
 	return nil
 }
 
-func setupBlockMissed(ctx context.Context) error {
+func setupBlockMissed(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Gauge("block_missed",
 		otelapi.WithDescription("height of the most recent missed block"),
 	)
@@ -87,7 +91,7 @@ func setupBlockMissed(ctx context.Context) error {
 	return nil
 }
 
-func setupBlocksLandedCount(ctx context.Context) error {
+func setupBlocksLandedCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Gauge("blocks_landed_count",
 		otelapi.WithDescription("blocks landed by our builder"),
 	)
@@ -98,7 +102,7 @@ func setupBlocksLandedCount(ctx context.Context) error {
 	return nil
 }
 
-func setupBlocksMissedCount(ctx context.Context) error {
+func setupBlocksMissedCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Gauge("blocks_missed_count",
 		otelapi.WithDescription("blocks missed by our builder"),
 	)
@@ -109,7 +113,7 @@ func setupBlocksMissedCount(ctx context.Context) error {
 	return nil
 }
 
-func setupBlocksSeenCount(ctx context.Context) error {
+func setupBlocksSeenCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Gauge("blocks_seen_count",
 		otelapi.WithDescription("blocks seen by the monitor"),
 	)
@@ -120,7 +124,7 @@ func setupBlocksSeenCount(ctx context.Context) error {
 	return nil
 }
 
-func setupReorgsCount(ctx context.Context) error {
+func setupReorgsCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("reorgs_count",
 		otelapi.WithDescription("chain reorgs count"),
 	)
@@ -131,7 +135,7 @@ func setupReorgsCount(ctx context.Context) error {
 	return nil
 }
 
-func setupReorgDepth(ctx context.Context) error {
+func setupReorgDepth(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Gauge("reorg_depth",
 		otelapi.WithDescription("depth of the most recent reorg"),
 	)
@@ -142,7 +146,7 @@ func setupReorgDepth(ctx context.Context) error {
 	return nil
 }
 
-func setupWalletBalance(ctx context.Context) error {
+func setupWalletBalance(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Float64ObservableGauge("wallet_balance",
 		otelapi.WithDescription("wallet balance"),
 	)
@@ -153,7 +157,7 @@ func setupWalletBalance(ctx context.Context) error {
 	return nil
 }
 
-func setupProbesSent(ctx context.Context) error {
+func setupProbesSent(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_sent_count",
 		otelapi.WithDescription("count of sent probe transactions"),
 	)
@@ -164,7 +168,7 @@ func setupProbesSent(ctx context.Context) error {
 	return nil
 }
 
-func setupProbesFailed(ctx context.Context) error {
+func setupProbesFailed(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_failed_count",
 		otelapi.WithDescription("count of probe transactions we failed to send"),
 	)
@@ -175,7 +179,7 @@ func setupProbesFailed(ctx context.Context) error {
 	return nil
 }
 
-func setupProbesLanded(ctx context.Context) error {
+func setupProbesLanded(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_landed_count",
 		otelapi.WithDescription("count of landed probe transactions"),
 	)
@@ -186,7 +190,7 @@ func setupProbesLanded(ctx context.Context) error {
 	return nil
 }
 
-func setupProbesLatency(ctx context.Context) error {
+func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Histogram("probes_latency",
 		otelapi.WithDescription("latency of landed probe transactions"),
 		otelapi.WithUnit("s"),
@@ -199,7 +203,7 @@ func setupProbesLatency(ctx context.Context) error {
 	return nil
 }
 
-func setupTxPerBlock(ctx context.Context) error {
+func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Histogram("tx_per_block",
 		otelapi.WithDescription("count of transactions in a block"),
 		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 92, 128, 184, 256),
@@ -211,14 +215,50 @@ func setupTxPerBlock(ctx context.Context) error {
 	return nil
 }
 
-func setupGasPerBlock(ctx context.Context) error {
+func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
+	boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
+		buckets := 12
+		base := math.Exp(math.Log(float64(cfg.MaxGasPerBlock)) / float64(buckets-1))
+		res := make([]float64, 0, buckets)
+		for i := range buckets {
+			res = append(res,
+				math.Round(2*math.Pow(base, float64(i)))/2,
+			)
+		}
+		return res
+	}()...)
+
 	m, err := meter.Int64Histogram("gas_per_block",
 		otelapi.WithDescription("gas per a block"),
-		otelapi.WithExplicitBucketBoundaries(0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000),
+		boundaries,
 	)
 	if err != nil {
 		return err
 	}
 	GasPerBlock = m
+	return nil
+}
+
+func setupGasPrice(ctx context.Context, cfg *config.Monitor) error {
+	boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
+		buckets := 12
+		base := math.Exp(math.Log(float64(cfg.MaxGasPrice)) / float64(buckets-1))
+		res := make([]float64, 0, buckets)
+		for i := range buckets {
+			res = append(res,
+				math.Round(2*math.Pow(base, float64(i)))/2,
+			)
+		}
+		return res
+	}()...)
+
+	m, err := meter.Int64Histogram("gas_price",
+		otelapi.WithDescription("gas price"),
+		boundaries,
+	)
+	if err != nil {
+		return err
+	}
+	GasPrice = m
 	return nil
 }

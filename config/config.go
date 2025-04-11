@@ -16,9 +16,12 @@ type Config struct {
 func New() *Config {
 	return &Config{
 		L1:     &L1{},
-		L2:     &L2{},
 		Log:    &Log{},
 		Server: &Server{},
+
+		L2: &L2{
+			Monitor: &Monitor{},
+		},
 	}
 }
 

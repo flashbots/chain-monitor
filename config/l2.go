@@ -7,7 +7,6 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type L2 struct {
@@ -18,10 +17,7 @@ type L2 struct {
 	BuilderAddress  string            `yaml:"builder_address"`
 	WalletAddresses map[string]string `yaml:"wallet_addresses"`
 
-	MonitorPrivateKey           string `yaml:"monitor_private_key"`
-	MonitorTxGasLimit           uint64 `yaml:"monitor_tx_gas_limit"`
-	MonitorTxGasPriceAdjustment int64  `yaml:"monitor_tx_gas_price_adjustment"`
-	MonitorTxGasPriceCap        int64  `yaml:"monitor_tx_gas_price_cap"`
+	Monitor *Monitor `yaml:"monitor"`
 }
 
 const (
@@ -29,11 +25,10 @@ const (
 )
 
 var (
-	errL2InvalidBuilderAddress    = errors.New("invalid l2 builder address")
-	errL2InvalidMonitorPrivateKey = errors.New("invalid monitor's private key")
-	errL2InvalidRPC               = errors.New("invalid l2 rpc url")
-	errL2InvalidWalletAddress     = errors.New("invalid l2 wallet address")
-	errL2ReorgWindowTooLarge      = errors.New("l2 reorg window is too large")
+	errL2InvalidBuilderAddress = errors.New("invalid l2 builder address")
+	errL2InvalidRPC            = errors.New("invalid l2 rpc url")
+	errL2InvalidWalletAddress  = errors.New("invalid l2 wallet address")
+	errL2ReorgWindowTooLarge   = errors.New("l2 reorg window is too large")
 )
 
 func (cfg *L2) Validate() error {
@@ -59,15 +54,6 @@ func (cfg *L2) Validate() error {
 				errL2InvalidBuilderAddress,
 				cfg.BuilderAddress,
 				len(_addr),
-			)
-		}
-	}
-
-	if cfg.MonitorPrivateKey != "" {
-		if _, err := crypto.HexToECDSA(cfg.MonitorPrivateKey); err != nil {
-			return fmt.Errorf("%w: %w",
-				errL2InvalidMonitorPrivateKey,
-				err,
 			)
 		}
 	}

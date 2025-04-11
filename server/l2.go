@@ -88,8 +88,8 @@ func newL2(cfg *config.L2) (*L2, error) {
 		copy(l2.builderAddr[:], addr)
 	}
 
-	if cfg.MonitorPrivateKey != "" { // monitorAddr, monitorKey
-		monitorKey, err := crypto.HexToECDSA(cfg.MonitorPrivateKey)
+	if cfg.Monitor.PrivateKey != "" { // monitorAddr, monitorKey
+		monitorKey, err := crypto.HexToECDSA(cfg.Monitor.PrivateKey)
 		if err != nil {
 			return nil, err
 		}
@@ -655,6 +655,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.RPC),
 			)
+			metrics.GasPrice.Record(ctx, gasPrice.Int64())
 		} else {
 			l.Warn("Failed to request suggested gas price",
 				zap.Error(err),
@@ -665,10 +666,10 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			return
 		}
 
-		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.MonitorTxGasPriceAdjustment))
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.Monitor.TxGasPriceAdjustment))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
 
-		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.MonitorTxGasPriceCap))
+		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.Monitor.TxGasPriceCap))
 	}
 
 	{ // get the nonce
@@ -711,7 +712,7 @@ tryingNonces:
 			nonce+nonceIncrement,
 			ethcommon.Address{},
 			nil,
-			l2.cfg.MonitorTxGasLimit,
+			l2.cfg.Monitor.TxGasLimit,
 			gasPrice,
 			data,
 		)

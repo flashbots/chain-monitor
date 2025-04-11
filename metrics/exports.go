@@ -23,4 +23,5 @@ var (
 
 	TxPerBlock  otelapi.Int64Histogram
 	GasPerBlock otelapi.Int64Histogram
+	GasPrice    otelapi.Int64Histogram
 )

@@ -47,6 +47,8 @@ OPTIONS:
 
    --l2-block-time duration                                 average duration between consecutive blocks on l2 (default: 2s) [$CHAIN_MONITOR_L2_BLOCK_TIME]
    --l2-builder-address address                             l2 builder address [$CHAIN_MONITOR_L2_BUILDER_ADDRESS]
+   --l2-monitor-max-gas-per-block wei                       l2's max gas per block limit in wei (for histogram metrics) (default: 30000000) [$CHAIN_MONITOR_L2_MONITOR_MAX_GAS_PER_BLOCK]
+   --l2-monitor-max-gas-price wei                           l2's max gas price limit in wei (for histogram metrics) (default: 30000000) [$CHAIN_MONITOR_L2_MONITOR_MAX_GAS_PRICE]
    --l2-monitor-private-key key                             l2 private key to send tx inclusion latency probes with [$CHAIN_MONITOR_L2_MONITOR_PRIVATE_KEY]
    --l2-monitor-tx-gas-limit limit                          l2 monitor transactions gas limit (default: 1000000) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_LIMIT]
    --l2-monitor-tx-gas-price-adjustment %                   l2 monitor transactions gas price adjustment in % (default: 10) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_PRICE_ADJUSTMENT]

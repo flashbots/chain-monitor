@@ -23,7 +23,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	l2WalletAddresses := &cli.StringSlice{}
 
 	l1Flags := []cli.Flag{
-		&cli.StringFlag{
+		&cli.StringFlag{ // --l1-rpc
 			Category:    strings.ToUpper(categoryEth),
 			Destination: &cfg.L1.RPC,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_RPC"},
@@ -32,7 +32,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "http://127.0.0.1:8545",
 		},
 
-		&cli.StringSliceFlag{
+		&cli.StringSliceFlag{ // --l1-monitor-wallets
 			Category:    strings.ToUpper(categoryEth),
 			Destination: l1WalletAddresses,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_MONITOR_WALLETS"},
@@ -42,7 +42,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	l2Flags := []cli.Flag{
-		&cli.DurationFlag{
+		&cli.DurationFlag{ // --l2-block-time
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.BlockTime,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BLOCK_TIME"},
@@ -51,7 +51,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       2 * time.Second,
 		},
 
-		&cli.StringFlag{
+		&cli.StringFlag{ // --l2-builder-address
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.BuilderAddress,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BUILDER_ADDRESS"},
@@ -59,42 +59,60 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Usage:       "l2 builder `address`",
 		},
 
-		&cli.StringFlag{
+		&cli.Uint64Flag{ // --l2-monitor-max-gas-per-block
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorPrivateKey,
+			Destination: &cfg.L2.Monitor.MaxGasPerBlock,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_MAX_GAS_PER_BLOCK"},
+			Name:        categoryL2 + "-monitor-max-gas-per-block",
+			Usage:       "l2's max gas per block limit in `wei` (for histogram metrics)",
+			Value:       30000000,
+		},
+
+		&cli.Uint64Flag{ // --l2-monitor-max-gas-price
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.Monitor.MaxGasPrice,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_MAX_GAS_PRICE"},
+			Name:        categoryL2 + "-monitor-max-gas-price",
+			Usage:       "l2's max gas price limit in `wei` (for histogram metrics)",
+			Value:       1000000000,
+		},
+
+		&cli.StringFlag{ // --l2-monitor-private-key
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.Monitor.PrivateKey,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_PRIVATE_KEY"},
 			Name:        categoryL2 + "-monitor-private-key",
 			Usage:       "l2 private `key` to send tx inclusion latency probes with",
 		},
 
-		&cli.Uint64Flag{
+		&cli.Uint64Flag{ // --l2-monitor-tx-gas-limit
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorTxGasLimit,
+			Destination: &cfg.L2.Monitor.TxGasLimit,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_LIMIT"},
 			Name:        categoryL2 + "-monitor-tx-gas-limit",
 			Usage:       "l2 monitor transactions gas `limit`",
 			Value:       1000000,
 		},
 
-		&cli.Int64Flag{
+		&cli.Int64Flag{ // --l2-monitor-tx-gas-price-adjustment
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorTxGasPriceAdjustment,
+			Destination: &cfg.L2.Monitor.TxGasPriceAdjustment,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_ADJUSTMENT"},
 			Name:        categoryL2 + "-monitor-tx-gas-price-adjustment",
 			Usage:       "l2 monitor transactions gas price adjustment in `%`",
 			Value:       10,
 		},
 
-		&cli.Int64Flag{
+		&cli.Int64Flag{ // --l2-monitor-tx-gas-price-cap
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorTxGasPriceCap,
+			Destination: &cfg.L2.Monitor.TxGasPriceCap,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_CAP"},
 			Name:        categoryL2 + "-monitor-tx-gas-price-cap",
 			Usage:       "l2 monitor transactions gas price cap in `wei`",
 			Value:       10,
 		},
 
-		&cli.DurationFlag{
+		&cli.DurationFlag{ // --l2-reorg-window
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.ReorgWindow,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_REORG_WINDOW"},
@@ -103,7 +121,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       24 * time.Hour,
 		},
 
-		&cli.StringFlag{
+		&cli.StringFlag{ // --l2-rpc
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.RPC,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_RPC"},
@@ -112,7 +130,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "http://127.0.0.1:8645",
 		},
 
-		&cli.StringSliceFlag{
+		&cli.StringSliceFlag{ // --l2-monitor-wallets
 			Category:    strings.ToUpper(categoryL2),
 			Destination: l2WalletAddresses,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_WALLETS"},
@@ -122,7 +140,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	serverFlags := []cli.Flag{
-		&cli.BoolFlag{
+		&cli.BoolFlag{ // --server-enable-pprof
 			Category:    strings.ToUpper(categoryServer),
 			Destination: &cfg.Server.EnablePprof,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryServer) + "_ENABLE_PPROF"},
@@ -131,7 +149,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       false,
 		},
 
-		&cli.StringFlag{
+		&cli.StringFlag{ // --server-enable-pprof
 			Category:    strings.ToUpper(categoryServer),
 			Destination: &cfg.Server.ListenAddress,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryServer) + "_LISTEN_ADDRESS"},
