@@ -191,15 +191,27 @@ func setupProbesLanded(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
-	m, err := meter.Int64Histogram("probes_latency",
-		otelapi.WithDescription("latency of landed probe transactions"),
-		otelapi.WithUnit("s"),
-		otelapi.WithExplicitBucketBoundaries(0, 1, 4, 16, 64, 256),
-	)
+	{ // TODO: remove in the future
+		m, err := meter.Int64Histogram("probes_latency",
+			otelapi.WithDescription("latency of landed probe transactions"),
+			otelapi.WithUnit("s"),
+			otelapi.WithExplicitBucketBoundaries(0, 1, 4, 16, 64, 256),
+		)
+		if err != nil {
+			return err
+		}
+		ProbesLatency_Old = m
+	}
+
+	m, err := NewInt64Candlestick("probes_latency_ohlc", "latency of landed probe transactions", "s")
 	if err != nil {
 		return err
 	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
 	ProbesLatency = m
+
 	return nil
 }
 

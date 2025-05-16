@@ -372,6 +372,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 					zap.Uint64("landed", block.Time()),
 				)
 				metrics.ProbesLatency.Record(ctx, int64(latency))
+				metrics.ProbesLatency_Old.Record(ctx, int64(latency))
 			}
 		}
 

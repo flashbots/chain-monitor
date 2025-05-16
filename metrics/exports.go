@@ -19,13 +19,15 @@ var (
 	ProbesSentCount   otelapi.Int64Counter
 	ProbesFailedCount otelapi.Int64Counter
 	ProbesLandedCount otelapi.Int64Counter
-	ProbesLatency     otelapi.Int64Histogram
-
-	TxPerBlock_Old  otelapi.Int64Histogram
-	GasPerBlock_Old otelapi.Int64Histogram
-	GasPrice_Old    otelapi.Int64Histogram
+	ProbesLatency     *Int64Candlestick
 
 	TxPerBlock  *Int64Candlestick
 	GasPerBlock *Int64Candlestick
 	GasPrice    *Int64Candlestick
+
+	// TODO: get rid of this
+	ProbesLatency_Old otelapi.Int64Histogram
+	TxPerBlock_Old    otelapi.Int64Histogram
+	GasPerBlock_Old   otelapi.Int64Histogram
+	GasPrice_Old      otelapi.Int64Histogram
 )
