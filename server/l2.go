@@ -701,6 +701,9 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 
 tryingNonces:
 	for attempt := 1; attempt <= 8; attempt++ { // we don't want to get rate-limited
+		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
+		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
+
 		tx := ethtypes.NewTransaction(
 			l2.nonce,
 			ethcommon.Address{},
@@ -709,9 +712,6 @@ tryingNonces:
 			gasPrice,
 			data,
 		)
-
-		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
-		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
 
 		signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.monitorKey)
 		if err != nil {
