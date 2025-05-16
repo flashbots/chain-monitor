@@ -204,11 +204,22 @@ func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
-	m, err := meter.Int64Histogram("tx_per_block",
-		otelapi.WithDescription("count of transactions in a block"),
-		otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 92, 128, 184, 256),
-	)
+	{ // TODO: remove in the future
+		m, err := meter.Int64Histogram("tx_per_block",
+			otelapi.WithDescription("count of transactions in a block"),
+			otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 92, 128, 184, 256),
+		)
+		if err != nil {
+			return err
+		}
+		TxPerBlock_Old = m
+	}
+
+	m, err := NewInt64Candlestick("tx_per_block_ohlc", "count of transactions in a block", "")
 	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
 		return err
 	}
 	TxPerBlock = m
@@ -216,23 +227,34 @@ func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
-	boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
-		buckets := 12
-		base := math.Exp(math.Log(float64(cfg.MaxGasPerBlock)) / float64(buckets-1))
-		res := make([]float64, 0, buckets)
-		for i := range buckets {
-			res = append(res,
-				math.Round(2*math.Pow(base, float64(i)))/2,
-			)
-		}
-		return res
-	}()...)
+	{ // TODO: remove in the future
+		boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
+			buckets := 12
+			base := math.Exp(math.Log(float64(cfg.MaxGasPerBlock)) / float64(buckets-1))
+			res := make([]float64, 0, buckets)
+			for i := range buckets {
+				res = append(res,
+					math.Round(2*math.Pow(base, float64(i)))/2,
+				)
+			}
+			return res
+		}()...)
 
-	m, err := meter.Int64Histogram("gas_per_block",
-		otelapi.WithDescription("gas per a block"),
-		boundaries,
-	)
+		m, err := meter.Int64Histogram("gas_per_block",
+			otelapi.WithDescription("gas per a block"),
+			boundaries,
+		)
+		if err != nil {
+			return err
+		}
+		GasPerBlock_Old = m
+	}
+
+	m, err := NewInt64Candlestick("gas_per_block_ohlc", "gas per a block", "")
 	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
 		return err
 	}
 	GasPerBlock = m
@@ -240,23 +262,34 @@ func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
 }
 
 func setupGasPrice(ctx context.Context, cfg *config.Monitor) error {
-	boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
-		buckets := 12
-		base := math.Exp(math.Log(float64(cfg.MaxGasPrice)) / float64(buckets-1))
-		res := make([]float64, 0, buckets)
-		for i := range buckets {
-			res = append(res,
-				math.Round(2*math.Pow(base, float64(i)))/2,
-			)
-		}
-		return res
-	}()...)
+	{ // TODO: remove in the future
+		boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
+			buckets := 12
+			base := math.Exp(math.Log(float64(cfg.MaxGasPrice)) / float64(buckets-1))
+			res := make([]float64, 0, buckets)
+			for i := range buckets {
+				res = append(res,
+					math.Round(2*math.Pow(base, float64(i)))/2,
+				)
+			}
+			return res
+		}()...)
 
-	m, err := meter.Int64Histogram("gas_price",
-		otelapi.WithDescription("gas price"),
-		boundaries,
-	)
+		m, err := meter.Int64Histogram("gas_price",
+			otelapi.WithDescription("gas price"),
+			boundaries,
+		)
+		if err != nil {
+			return err
+		}
+		GasPrice_Old = m
+	}
+
+	m, err := NewInt64Candlestick("gas_price_ohlc", "gas price", "")
 	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
 		return err
 	}
 	GasPrice = m

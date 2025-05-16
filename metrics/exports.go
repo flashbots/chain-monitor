@@ -21,7 +21,11 @@ var (
 	ProbesLandedCount otelapi.Int64Counter
 	ProbesLatency     otelapi.Int64Histogram
 
-	TxPerBlock  otelapi.Int64Histogram
-	GasPerBlock otelapi.Int64Histogram
-	GasPrice    otelapi.Int64Histogram
+	TxPerBlock_Old  otelapi.Int64Histogram
+	GasPerBlock_Old otelapi.Int64Histogram
+	GasPrice_Old    otelapi.Int64Histogram
+
+	TxPerBlock  *Int64Candlestick
+	GasPerBlock *Int64Candlestick
+	GasPrice    *Int64Candlestick
 )

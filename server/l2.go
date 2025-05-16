@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -48,6 +49,8 @@ type L2 struct {
 	blocksSeen   int64
 
 	processBlockFailuresCount uint
+
+	nonce uint64
 
 	unwindingByHash    bool
 	unwindByHashHeight uint64
@@ -300,8 +303,11 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		return err
 	}
 
+	metrics.TxPerBlock_Old.Record(ctx, int64(len(block.Transactions())))
 	metrics.TxPerBlock.Record(ctx, int64(len(block.Transactions())))
+
 	metrics.GasPerBlock.Record(ctx, int64(block.GasUsed()))
+	metrics.GasPerBlock_Old.Record(ctx, int64(block.GasUsed()))
 
 	if blockNumber > 0 {
 		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
@@ -367,6 +373,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 				)
 				metrics.ProbesLatency.Record(ctx, int64(latency))
 			}
+		}
+
+		if gasPrice := tx.GasPrice().Int64(); gasPrice > 0 {
+			metrics.GasPrice.Record(ctx, gasPrice)
 		}
 	}
 
@@ -546,7 +556,7 @@ func (l2 *L2) isProbeTx(
 	ctx context.Context,
 	block *ethtypes.Block,
 	tx *ethtypes.Transaction,
-) (isProbeTx bool, sent, latency uint64) {
+) (isProbeTx bool, txEpoch, latency uint64) {
 	if tx == nil || tx.To() == nil || tx.To().Cmp(ethcommon.Address{}) != 0 {
 		return false, 0, 0 // probe tx burns eth by sending 0 ETH to zero address
 	}
@@ -572,18 +582,22 @@ func (l2 *L2) isProbeTx(
 		return false, 0, 0
 	}
 
-	blockTime := block.Time()
-	sent = binary.BigEndian.Uint64(tx.Data())
-	if blockTime < sent {
+	blockEpoch := block.Time()
+	txEpoch = binary.BigEndian.Uint64(tx.Data())
+	if blockEpoch < txEpoch {
 		l := logutils.LoggerFromContext(ctx)
-		l.Warn("Monitoring transaction from future",
-			zap.String("tx", tx.Hash().Hex()),
+		l.Warn("Block time precedes the monitoring transaction's time",
 			zap.String("block", block.Number().String()),
+			zap.String("tx", tx.Hash().Hex()),
+			zap.Uint64("block_epoch", blockEpoch),
+			zap.Time("block_time", time.Unix(int64(blockEpoch), 0)),
+			zap.Uint64("tx_epoch", txEpoch),
+			zap.Time("tx_time", time.Unix(int64(txEpoch), 0)),
 		)
 	}
-	latency = blockTime - sent
+	latency = blockEpoch - txEpoch
 
-	return true, sent, latency
+	return true, txEpoch, latency
 }
 
 func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
@@ -636,7 +650,6 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 	var (
 		data     = make([]byte, 8)
 		gasPrice *big.Int
-		nonce    uint64
 		err      error
 	)
 
@@ -644,25 +657,18 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting suggested gas price...",
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
 		gasPrice, err = l2.rpc.SuggestGasPrice(_ctx)
 		if err == nil {
-			l.Debug("Requested suggested gas price",
-				zap.String("gas_price", gasPrice.String()),
-				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
-			)
-			metrics.GasPrice.Record(ctx, gasPrice.Int64())
+			metrics.GasPrice_Old.Record(ctx, gasPrice.Int64())
 		} else {
 			l.Warn("Failed to request suggested gas price",
 				zap.Error(err),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.RPC),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1)
+			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
+			))
 			return
 		}
 
@@ -672,44 +678,30 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.Monitor.TxGasPriceCap))
 	}
 
-	{ // get the nonce
+	if l2.nonce == 0 { // get the nonce
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting nonce...",
-			zap.String("at", l2.monitorAddr.String()),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
-		nonce, err = l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
-		if err == nil {
-			l.Debug("Requested nonce",
-				zap.Uint64("nonce", nonce),
-				zap.String("at", l2.monitorAddr.String()),
-				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
-			)
-		} else {
-			l.Warn("Failed request nonce",
+		nonce, err := l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
+		if err != nil {
+			l.Warn("Failed to request a nonce",
 				zap.Error(err),
-				zap.String("at", l2.monitorAddr.String()),
+				zap.String("address", l2.monitorAddr.String()),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.RPC),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1)
+			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
+			))
 			return
 		}
+		l2.nonce = nonce
 	}
 
-	errs := make([]error, 0, 8)
-
 tryingNonces:
-	for nonceIncrement := uint64(0); nonceIncrement < 8; nonceIncrement++ {
-		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
-		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
-
+	for attempt := 1; attempt <= 8; attempt++ { // we don't want to get rate-limited
 		tx := ethtypes.NewTransaction(
-			nonce+nonceIncrement,
+			l2.nonce,
 			ethcommon.Address{},
 			nil,
 			l2.cfg.Monitor.TxGasLimit,
@@ -717,73 +709,95 @@ tryingNonces:
 			data,
 		)
 
+		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
+		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
+
 		signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.monitorKey)
 		if err != nil {
 			l.Error("Failed to sign a transaction",
 				zap.Error(err),
-				zap.String("monitor_address", l2.monitorAddr.String()),
+				zap.String("address", l2.monitorAddr.String()),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1)
+			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("signature-failure")},
+			))
 			return
 		}
 
 		_ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Sending a transaction...",
-			zap.String("from", l2.monitorAddr.String()),
-			zap.String("to", tx.To().String()),
-			zap.Uint64("nonce", nonce+nonceIncrement),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
-		if err := l2.rpc.SendTransaction(_ctx, signedTx); err == nil {
-			l.Debug("Sent a transaction",
-				zap.String("from", l2.monitorAddr.String()),
-				zap.String("to", tx.To().String()),
-				zap.Uint64("nonce", nonce+nonceIncrement),
-				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
-			)
-		} else {
-			errs = append(errs,
-				fmt.Errorf("nonce %d (%d+%d): %w", nonce+nonceIncrement, nonce, nonceIncrement, err),
-			)
+		err = l2.rpc.SendTransaction(_ctx, signedTx)
+		if err == nil {
+			metrics.ProbesSentCount.Add(ctx, 1)
+			l2.nonce++
+			return
+		}
 
-			for _, msg := range []string{
-				"replacement transaction underpriced",
-				"nonce too low",
-				"already known",
-			} {
-				if strings.HasPrefix(err.Error(), msg) {
-					continue tryingNonces // perhaps the next nonce will be a success
-				}
-			}
-
+		if ctxErr := ctx.Err(); ctxErr != nil {
 			l.Error("Failed to send a transaction",
-				zap.Error(utils.FlattenErrors(errs)),
-				zap.String("from", l2.monitorAddr.String()),
+				zap.Error(errors.Join(err, ctxErr)),
+				zap.String("address", l2.monitorAddr.String()),
 				zap.String("to", tx.To().String()),
-				zap.Uint64("nonce", nonce+nonceIncrement),
+				zap.Uint64("nonce", l2.nonce),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.RPC),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1)
-
+			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
+			))
 			return // irrecoverable error (for now, at least) => no point in trying other nonces
 		}
 
-		metrics.ProbesSentCount.Add(ctx, 1)
+		l.Error("Failed to send a transaction",
+			zap.Error(err),
+			zap.String("address", l2.monitorAddr.String()),
+			zap.String("to", tx.To().String()),
+			zap.Uint64("nonce", l2.nonce),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.RPC),
+		)
 
-		return // yay, sent the probe tx
+		switch {
+		case strings.Contains(err.Error(), "insufficient funds"):
+			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("insufficient-funds")},
+			))
+			return // irrecoverable error
+
+		case strings.Contains(err.Error(), "replacement transaction underpriced"):
+			l2.nonce++ // there's already a tx with this nonce => try next one
+			continue tryingNonces
+
+		case strings.Contains(err.Error(), "nonce too low"):
+			_ctx, cancel := context.WithTimeout(ctx, time.Second)
+			defer cancel()
+
+			nonce, err := l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
+			if err != nil {
+				l.Warn("Failed to request a nonce",
+					zap.Error(err),
+					zap.String("address", l2.monitorAddr.String()),
+					zap.String("kind", "l2"),
+					zap.String("rpc", l2.cfg.RPC),
+				)
+				metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+					attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
+				))
+				return
+			}
+			l2.nonce = nonce
+
+			continue tryingNonces
+		}
+
+		metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "reason", Value: attribute.StringValue("unknown")},
+		))
+		return
 	}
 
-	l.Error("Failed to send a transaction",
-		zap.Error(utils.FlattenErrors(errs)),
-		zap.String("from", l2.monitorAddr.String()),
-		zap.String("to", l2.builderAddr.String()),
-		zap.String("kind", "l2"),
-		zap.String("rpc", l2.cfg.RPC),
-	)
-	metrics.ProbesFailedCount.Add(ctx, 1)
+	metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "reason", Value: attribute.StringValue("no-more-attempts")},
+	))
 }
