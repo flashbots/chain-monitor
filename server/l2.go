@@ -765,6 +765,10 @@ tryingNonces:
 			))
 			return // irrecoverable error
 
+		case strings.Contains(err.Error(), "already known"):
+			l2.nonce++ // there's already a tx with this nonce => try next one
+			continue tryingNonces
+
 		case strings.Contains(err.Error(), "replacement transaction underpriced"):
 			l2.nonce++ // there's already a tx with this nonce => try next one
 			continue tryingNonces
