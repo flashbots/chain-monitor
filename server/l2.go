@@ -139,10 +139,7 @@ func newL2(cfg *config.L2) (*L2, error) {
 	}
 
 	{ // blocks, blockHeight
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		blockHeight, err := l2.rpc.BlockNumber(ctx)
+		blockHeight, err := l2.rpc.BlockNumber(context.Background())
 		if err != nil {
 			l.Error("Failed to request block number",
 				zap.Error(err),
@@ -189,9 +186,6 @@ func (l2 *L2) stop() {
 
 func (l2 *L2) processNewBlocks(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
 
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
 	if err != nil {
@@ -242,9 +236,6 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 
 func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	l := logutils.LoggerFromContext(ctx)
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
 
 	block, err := l2.rpc.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
@@ -390,9 +381,6 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 				zap.Int64("blocks_seen", l2.blocksSeen),
 			)
 		}
-
-		ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
 
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
 		if err != nil {
@@ -549,9 +537,6 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
 	for name, addr := range l2.wallets {
-		ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
 		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {
 			l.Warn("Failed to request balance",
@@ -585,10 +570,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 	)
 
 	{ // get the gas price
-		_ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
-		gasPrice, err = l2.rpc.SuggestGasPrice(_ctx)
+		gasPrice, err = l2.rpc.SuggestGasPrice(ctx)
 		if err == nil {
 			metrics.GasPrice_Old.Record(ctx, gasPrice.Int64())
 		} else {
@@ -610,10 +592,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 	}
 
 	if l2.nonce == 0 { // get the nonce
-		_ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
-		nonce, err := l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
+		nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr, nil)
 		if err != nil {
 			l.Warn("Failed to request a nonce",
 				zap.Error(err),
@@ -655,10 +634,7 @@ tryingNonces:
 			return
 		}
 
-		_ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
-		err = l2.rpc.SendTransaction(_ctx, signedTx)
+		err = l2.rpc.SendTransaction(ctx, signedTx)
 		if err == nil {
 			metrics.ProbesSentCount.Add(ctx, 1)
 			l2.nonce++
@@ -705,10 +681,7 @@ tryingNonces:
 			continue tryingNonces
 
 		case strings.Contains(err.Error(), "nonce too low"):
-			_ctx, cancel := context.WithTimeout(ctx, time.Second)
-			defer cancel()
-
-			nonce, err := l2.rpc.NonceAt(_ctx, l2.monitorAddr, nil)
+			nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr, nil)
 			if err != nil {
 				l.Warn("Failed to request a nonce",
 					zap.Error(err),

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/chain-monitor/config"
@@ -69,9 +68,6 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
 	for name, addr := range l1.wallets {
-		ctx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-
 		_balance, err := l1.rpc.BalanceAt(ctx, addr, nil)
 		if err != nil {
 			l.Error("Failed to request balance",
