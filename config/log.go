@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flashbots/chain-monitor/utils"
 	"go.uber.org/zap"
 )
 
@@ -18,17 +19,19 @@ var (
 )
 
 func (cfg *Log) Validate() error {
+	errs := make([]error, 0)
+
 	if cfg.Mode != "dev" && cfg.Mode != "prod" {
-		return fmt.Errorf("%w: %s",
+		errs = append(errs, fmt.Errorf("%w: %s",
 			errLogInvalidMode, cfg.Mode,
-		)
+		))
 	}
 
 	if _, err := zap.ParseAtomicLevel(cfg.Level); err != nil {
-		return fmt.Errorf("%w: %s: %w",
+		errs = append(errs, fmt.Errorf("%w: %s: %w",
 			errLogInvalidLevel, cfg.Level, err,
-		)
+		))
 	}
 
-	return nil
+	return utils.FlattenErrors(errs)
 }

@@ -6,44 +6,59 @@ import (
 	"net/url"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/flashbots/chain-monitor/utils"
 )
 
 type L1 struct {
-	RPC             string            `yaml:"rpc"`
+	Rpc             string            `yaml:"rpc"`
+	RpcFallback     []string          `yaml:"rpc_fallback"`
 	WalletAddresses map[string]string `yaml:"wallet_addresses"`
 }
 
 var (
-	errL1InvalidRPC           = errors.New("invalid l1 rpc url")
+	errL1InvalidRpc           = errors.New("invalid l1 rpc url")
+	errL1InvalidRpcFallback   = errors.New("invalid l1 fallback rpc url")
 	errL1InvalidWalletAddress = errors.New("invalid l1 wallet address")
 )
 
 func (cfg *L1) Validate() error {
-	if _, err := url.Parse(cfg.RPC); err != nil {
-		return fmt.Errorf("%w: %s: %w",
-			errL1InvalidRPC,
-			cfg.RPC,
+	errs := make([]error, 0)
+
+	if _, err := url.Parse(cfg.Rpc); err != nil {
+		errs = append(errs, fmt.Errorf("%w: %s: %w",
+			errL1InvalidRpc,
+			cfg.Rpc,
 			err,
-		)
+		))
+	}
+
+	for _, rpc := range cfg.RpcFallback {
+		if _, err := url.Parse(rpc); err != nil {
+			errs = append(errs, fmt.Errorf("%w: %s: %w",
+				errL1InvalidRpcFallback,
+				rpc,
+				err,
+			))
+		}
 	}
 
 	for _, wa := range cfg.WalletAddresses {
 		_addr, err := ethcommon.ParseHexOrString(wa)
 		if err != nil {
-			return fmt.Errorf("%w: %s: %w",
+			errs = append(errs, fmt.Errorf("%w: %s: %w",
 				errL1InvalidWalletAddress,
 				wa,
 				err,
-			)
+			))
 		}
 		if len(_addr) != 20 {
-			return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+			errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
 				errL1InvalidWalletAddress,
 				wa,
 				len(wa),
-			)
+			))
 		}
 	}
 
-	return nil
+	return utils.FlattenErrors(errs)
 }

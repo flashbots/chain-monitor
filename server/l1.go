@@ -6,10 +6,10 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/flashbots/chain-monitor/config"
 	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
+	"github.com/flashbots/chain-monitor/rpc"
 	"github.com/flashbots/chain-monitor/utils"
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
@@ -18,7 +18,7 @@ import (
 
 type L1 struct {
 	cfg     *config.L1
-	rpc     *ethclient.Client
+	rpc     *rpc.RPC
 	wallets map[string]ethcommon.Address
 }
 
@@ -43,7 +43,7 @@ func newL1(cfg *config.L1) (*L1, error) {
 		wallets[name] = addr
 	}
 
-	rpc, err := ethclient.Dial(cfg.RPC)
+	rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,26 +72,13 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting balance...",
-			zap.String("at", addr.String()),
-			zap.String("kind", "l1"),
-			zap.String("rpc", l1.cfg.RPC),
-		)
-
 		_balance, err := l1.rpc.BalanceAt(ctx, addr, nil)
-		if err == nil {
-			l.Debug("Requested balance",
-				zap.String("balance", _balance.String()),
-				zap.String("at", addr.String()),
-				zap.String("kind", "l1"),
-				zap.String("rpc", l1.cfg.RPC),
-			)
-		} else {
+		if err != nil {
 			l.Error("Failed to request balance",
 				zap.Error(err),
 				zap.String("at", addr.String()),
 				zap.String("kind", "l1"),
-				zap.String("rpc", l1.cfg.RPC),
+				zap.String("rpc", l1.cfg.Rpc),
 			)
 			errs = append(errs, err)
 			continue

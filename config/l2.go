@@ -7,12 +7,14 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/flashbots/chain-monitor/utils"
 )
 
 type L2 struct {
 	BlockTime   time.Duration `yaml:"block_time"`
 	ReorgWindow time.Duration `yaml:"reorg_window"`
-	RPC         string        `yaml:"rpc"`
+	Rpc         string        `yaml:"rpc"`
+	RpcFallback []string      `yaml:"rpc_fallback"`
 
 	BuilderAddress  string            `yaml:"builder_address"`
 	WalletAddresses map[string]string `yaml:"wallet_addresses"`
@@ -26,63 +28,76 @@ const (
 
 var (
 	errL2InvalidBuilderAddress = errors.New("invalid l2 builder address")
-	errL2InvalidRPC            = errors.New("invalid l2 rpc url")
+	errL2InvalidRpc            = errors.New("invalid l2 rpc url")
+	errL2InvalidRpcFallback    = errors.New("invalid l2 fallback rpc url")
 	errL2InvalidWalletAddress  = errors.New("invalid l2 wallet address")
 	errL2ReorgWindowTooLarge   = errors.New("l2 reorg window is too large")
 )
 
 func (cfg *L2) Validate() error {
-	if _, err := url.Parse(cfg.RPC); err != nil {
-		return fmt.Errorf("%w: %s: %w",
-			errL2InvalidRPC,
-			cfg.RPC,
+	errs := make([]error, 0)
+
+	if _, err := url.Parse(cfg.Rpc); err != nil {
+		errs = append(errs, fmt.Errorf("%w: %s: %w",
+			errL2InvalidRpc,
+			cfg.Rpc,
 			err,
-		)
+		))
+	}
+
+	for _, rpc := range cfg.RpcFallback {
+		if _, err := url.Parse(rpc); err != nil {
+			errs = append(errs, fmt.Errorf("%w: %s: %w",
+				errL2InvalidRpcFallback,
+				rpc,
+				err,
+			))
+		}
 	}
 
 	if cfg.BuilderAddress != "" {
 		_addr, err := ethcommon.ParseHexOrString(cfg.BuilderAddress)
 		if err != nil {
-			return fmt.Errorf("%w: %s: %w",
+			errs = append(errs, fmt.Errorf("%w: %s: %w",
 				errL2InvalidBuilderAddress,
 				cfg.BuilderAddress,
 				err,
-			)
+			))
 		}
 		if len(_addr) != 20 {
-			return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+			errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
 				errL2InvalidBuilderAddress,
 				cfg.BuilderAddress,
 				len(_addr),
-			)
+			))
 		}
 	}
 
 	if cfg.ReorgWindow > maxReorgWindow {
-		return fmt.Errorf("%w (max %d): %d",
+		errs = append(errs, fmt.Errorf("%w (max %d): %d",
 			errL2ReorgWindowTooLarge,
 			maxReorgWindow,
 			cfg.ReorgWindow,
-		)
+		))
 	}
 
 	for _, wa := range cfg.WalletAddresses {
 		_addr, err := ethcommon.ParseHexOrString(wa)
 		if err != nil {
-			return fmt.Errorf("%w: %s: %w",
+			errs = append(errs, fmt.Errorf("%w: %s: %w",
 				errL2InvalidWalletAddress,
 				wa,
 				err,
-			)
+			))
 		}
 		if len(_addr) != 20 {
-			return fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+			errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
 				errL2InvalidWalletAddress,
 				wa,
 				len(wa),
-			)
+			))
 		}
 	}
 
-	return nil
+	return utils.FlattenErrors(errs)
 }

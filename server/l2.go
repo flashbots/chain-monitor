@@ -14,6 +14,7 @@ import (
 	"github.com/flashbots/chain-monitor/config"
 	"github.com/flashbots/chain-monitor/logutils"
 	"github.com/flashbots/chain-monitor/metrics"
+	"github.com/flashbots/chain-monitor/rpc"
 	"github.com/flashbots/chain-monitor/types"
 	"github.com/flashbots/chain-monitor/utils"
 
@@ -22,7 +23,6 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
@@ -31,7 +31,7 @@ import (
 type L2 struct {
 	cfg *config.L2
 
-	rpc    *ethclient.Client
+	rpc    *rpc.RPC
 	ticker *time.Ticker
 
 	builderAddr ethcommon.Address
@@ -117,7 +117,7 @@ func newL2(cfg *config.L2) (*L2, error) {
 	}
 
 	{ // rpc
-		rpc, err := ethclient.Dial(cfg.RPC)
+		rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
 		if err != nil {
 			return nil, err
 		}
@@ -125,25 +125,11 @@ func newL2(cfg *config.L2) (*L2, error) {
 	}
 
 	{ // chainID, signer
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		l.Debug("Requesting network id...",
-			zap.String("kind", "l2"),
-			zap.String("rpc", cfg.RPC),
-		)
-		chainID, err := l2.rpc.NetworkID(ctx)
-		if err == nil {
-			l.Debug("Requested network id",
-				zap.String("network_id", chainID.String()),
-				zap.String("kind", "l2"),
-				zap.String("rpc", cfg.RPC),
-			)
-		} else {
+		chainID, err := l2.rpc.NetworkID(context.Background())
+		if err != nil {
 			l.Error("Failed to request network id",
 				zap.Error(err),
 				zap.String("kind", "l2"),
-				zap.String("rpc", cfg.RPC),
 			)
 			return nil, err
 		}
@@ -156,22 +142,12 @@ func newL2(cfg *config.L2) (*L2, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		l.Debug("Requesting block number...",
-			zap.String("kind", "l2"),
-			zap.String("rpc", cfg.RPC),
-		)
 		blockHeight, err := l2.rpc.BlockNumber(ctx)
-		if err == nil {
-			l.Debug("Requested block number",
-				zap.Uint64("block_number", blockHeight),
-				zap.String("kind", "l2"),
-				zap.String("rpc", cfg.RPC),
-			)
-		} else {
+		if err != nil {
 			l.Error("Failed to request block number",
 				zap.Error(err),
 				zap.String("kind", "l2"),
-				zap.String("rpc", cfg.RPC),
+				zap.String("rpc", cfg.Rpc),
 			)
 			return nil, err
 		}
@@ -217,22 +193,12 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 
-	l.Debug("Requesting block number...",
-		zap.String("kind", "l2"),
-		zap.String("rpc", l2.cfg.RPC),
-	)
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
-	if err == nil {
-		l.Debug("Requested block number",
-			zap.Uint64("block_number", blockHeight),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
-	} else {
+	if err != nil {
 		l.Warn("Failed to request block number, skipping this round...",
 			zap.Error(err),
 			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
+			zap.String("rpc", l2.cfg.Rpc),
 		)
 		return
 	}
@@ -280,25 +246,13 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 
-	l.Debug("Requesting block by number...",
-		zap.Uint64("number", blockNumber),
-		zap.String("kind", "l2"),
-		zap.String("rpc", l2.cfg.RPC),
-	)
 	block, err := l2.rpc.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-	if err == nil {
-		l.Debug("Requested block by number",
-			zap.String("block_hash", block.Hash().String()),
-			zap.Uint64("number", blockNumber),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
-	} else {
+	if err != nil {
 		l.Warn("Failed to request block by number",
 			zap.Error(err),
 			zap.Uint64("number", blockNumber),
 			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
+			zap.String("rpc", l2.cfg.Rpc),
 		)
 		return err
 	}
@@ -440,25 +394,13 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting block by number...",
-			zap.String("number", br.number.String()),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
 		block, err := l2.rpc.BlockByNumber(ctx, br.number)
-		if err == nil {
-			l.Debug("Requested block by number",
-				zap.String("block_hash", block.Hash().String()),
-				zap.String("number", br.number.String()),
-				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
-			)
-		} else {
+		if err != nil {
 			l.Warn("Failed to request block by number, skipping this round of unwind...",
 				zap.Error(err),
 				zap.String("number", br.number.String()),
 				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.String("rpc", l2.cfg.Rpc),
 			)
 			return err
 		}
@@ -610,25 +552,13 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		l.Debug("Requesting balance...",
-			zap.String("at", addr.String()),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
-		)
 		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
-		if err == nil {
-			l.Debug("Requested balance",
-				zap.String("balance", _balance.String()),
-				zap.String("at", addr.String()),
-				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
-			)
-		} else {
+		if err != nil {
 			l.Warn("Failed to request balance",
 				zap.Error(err),
 				zap.String("at", addr.String()),
 				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.String("rpc", l2.cfg.Rpc),
 			)
 			errs = append(errs, err)
 			continue
@@ -665,7 +595,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			l.Warn("Failed to request suggested gas price",
 				zap.Error(err),
 				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.String("rpc", l2.cfg.Rpc),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
 				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
@@ -689,7 +619,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.Error(err),
 				zap.String("address", l2.monitorAddr.String()),
 				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.String("rpc", l2.cfg.Rpc),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
 				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
@@ -742,7 +672,7 @@ tryingNonces:
 				zap.String("to", tx.To().String()),
 				zap.Uint64("nonce", l2.nonce),
 				zap.String("kind", "l2"),
-				zap.String("rpc", l2.cfg.RPC),
+				zap.String("rpc", l2.cfg.Rpc),
 			)
 			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
 				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
@@ -756,7 +686,7 @@ tryingNonces:
 			zap.String("to", tx.To().String()),
 			zap.Uint64("nonce", l2.nonce),
 			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.RPC),
+			zap.String("rpc", l2.cfg.Rpc),
 		)
 
 		switch {
@@ -784,7 +714,7 @@ tryingNonces:
 					zap.Error(err),
 					zap.String("address", l2.monitorAddr.String()),
 					zap.String("kind", "l2"),
-					zap.String("rpc", l2.cfg.RPC),
+					zap.String("rpc", l2.cfg.Rpc),
 				)
 				metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},

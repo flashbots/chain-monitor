@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/flashbots/chain-monitor/utils"
 )
 
 type Monitor struct {
@@ -23,14 +24,16 @@ var (
 )
 
 func (cfg *Monitor) Validate() error {
+	errs := make([]error, 0)
+
 	if cfg.PrivateKey != "" {
 		if _, err := crypto.HexToECDSA(cfg.PrivateKey); err != nil {
-			return fmt.Errorf("%w: %w",
+			errs = append(errs, fmt.Errorf("%w: %w",
 				errL2InvalidMonitorPrivateKey,
 				err,
-			)
+			))
 		}
 	}
 
-	return nil
+	return utils.FlattenErrors(errs)
 }

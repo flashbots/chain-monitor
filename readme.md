@@ -42,13 +42,14 @@ OPTIONS:
 
    --l1-monitor-wallets list [ --l1-monitor-wallets list ]  list of l1 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L1_MONITOR_WALLETS]
    --l1-rpc url                                             url of l1 rpc endpoint (default: "http://127.0.0.1:8545") [$CHAIN_MONITOR_L1_RPC]
+   --l1-rpc-fallback url [ --l1-rpc-fallback url ]          url of fallback l1 rpc endpoint [$CHAIN_MONITOR_L1_RPC_FALLBACK]
 
    L2
 
    --l2-block-time duration                                 average duration between consecutive blocks on l2 (default: 2s) [$CHAIN_MONITOR_L2_BLOCK_TIME]
    --l2-builder-address address                             l2 builder address [$CHAIN_MONITOR_L2_BUILDER_ADDRESS]
    --l2-monitor-max-gas-per-block wei                       l2's max gas per block limit in wei (for histogram metrics) (default: 30000000) [$CHAIN_MONITOR_L2_MONITOR_MAX_GAS_PER_BLOCK]
-   --l2-monitor-max-gas-price wei                           l2's max gas price limit in wei (for histogram metrics) (default: 30000000) [$CHAIN_MONITOR_L2_MONITOR_MAX_GAS_PRICE]
+   --l2-monitor-max-gas-price wei                           l2's max gas price limit in wei (for histogram metrics) (default: 1000000000) [$CHAIN_MONITOR_L2_MONITOR_MAX_GAS_PRICE]
    --l2-monitor-private-key key                             l2 private key to send tx inclusion latency probes with [$CHAIN_MONITOR_L2_MONITOR_PRIVATE_KEY]
    --l2-monitor-tx-gas-limit limit                          l2 monitor transactions gas limit (default: 1000000) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_LIMIT]
    --l2-monitor-tx-gas-price-adjustment %                   l2 monitor transactions gas price adjustment in % (default: 10) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_PRICE_ADJUSTMENT]
@@ -56,6 +57,7 @@ OPTIONS:
    --l2-monitor-wallets list [ --l2-monitor-wallets list ]  list of l2 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLETS]
    --l2-reorg-window duration                               max duration of block history to keep in memory for the l2 reorg adjustments (default: 24h0m0s) [$CHAIN_MONITOR_L2_REORG_WINDOW]
    --l2-rpc url                                             url of l2 rpc endpoint (default: "http://127.0.0.1:8645") [$CHAIN_MONITOR_L2_RPC]
+   --l2-rpc-fallback url [ --l2-rpc-fallback url ]          url of fallback l2 rpc endpoint [$CHAIN_MONITOR_L2_RPC_FALLBACK]
 
    SERVER
 
