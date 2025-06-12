@@ -158,6 +158,9 @@ func newL2(cfg *config.L2) (*L2, error) {
 						zap.String("file_name", fname),
 					)
 					l2.blocks = blocks
+					if head, ok := blocks.Head(); ok {
+						l2.blockHeight = head.Number.Uint64()
+					}
 				} else {
 					l.Error("Failed to load the state",
 						zap.Error(err),
@@ -301,11 +304,9 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		return err
 	}
 
-	metrics.TxPerBlock_Old.Record(ctx, int64(len(block.Transactions())))
 	metrics.TxPerBlock.Record(ctx, int64(len(block.Transactions())))
 
 	metrics.GasPerBlock.Record(ctx, int64(block.GasUsed()))
-	metrics.GasPerBlock_Old.Record(ctx, int64(block.GasUsed()))
 
 	if blockNumber > 0 {
 		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
@@ -370,12 +371,23 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 					zap.Uint64("landed", block.Time()),
 				)
 				metrics.ProbesLatency.Record(ctx, int64(latency))
-				metrics.ProbesLatency_Old.Record(ctx, int64(latency))
 			}
 		}
 
 		if gasPrice := tx.GasPrice().Int64(); gasPrice > 0 {
 			metrics.GasPrice.Record(ctx, gasPrice)
+			metrics.GasPricePerTx.Record(ctx, gasPrice)
+		}
+
+		if receipt, err := l2.rpc.TransactionReceipt(ctx, tx.Hash()); err == nil {
+			if receipt != nil {
+				metrics.GasPerTx.Record(ctx, int64(receipt.GasUsed))
+			}
+		} else {
+			l.Warn("Failed to get transaction receipt",
+				zap.Error(err),
+				zap.String("tx", tx.Hash().Hex()),
+			)
 		}
 	}
 
@@ -624,9 +636,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 
 	{ // get the gas price
 		gasPrice, err = l2.rpc.SuggestGasPrice(ctx)
-		if err == nil {
-			metrics.GasPrice_Old.Record(ctx, gasPrice.Int64())
-		} else {
+		if err != nil {
 			l.Warn("Failed to request suggested gas price",
 				zap.Error(err),
 				zap.String("kind", "l2"),

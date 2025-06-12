@@ -1,15 +1,18 @@
 package metrics
 
 import (
+	"context"
+
+	"github.com/flashbots/chain-monitor/config"
 	otelapi "go.opentelemetry.io/otel/metric"
 )
 
 var (
+	BlockMissed otelapi.Int64Gauge
+
 	BlocksLandedCount otelapi.Int64Gauge
 	BlocksMissedCount otelapi.Int64Gauge
 	BlocksSeenCount   otelapi.Int64Gauge
-
-	BlockMissed otelapi.Int64Gauge
 
 	ReorgsCount otelapi.Int64Counter
 	ReorgDepth  otelapi.Int64Gauge
@@ -21,13 +24,42 @@ var (
 	ProbesLandedCount otelapi.Int64Counter
 	ProbesLatency     *Int64Candlestick
 
-	TxPerBlock  *Int64Candlestick
-	GasPerBlock *Int64Candlestick
-	GasPrice    *Int64Candlestick
+	GasPerBlock   *Int64Candlestick
+	GasPerTx      *Int64Candlestick
+	GasPricePerTx *Int64Candlestick
+	L1FeePerTx    *Int64Candlestick
+	TxPerBlock    *Int64Candlestick
 
 	// TODO: get rid of this
-	ProbesLatency_Old otelapi.Int64Histogram
-	TxPerBlock_Old    otelapi.Int64Histogram
-	GasPerBlock_Old   otelapi.Int64Histogram
-	GasPrice_Old      otelapi.Int64Histogram
+	GasPrice *Int64Candlestick
+)
+
+var (
+	setups = []func(context.Context, *config.Monitor) error{
+		setupMeter, // must come first
+
+		setupBlockMissed,
+
+		setupBlocksLandedCount,
+		setupBlocksMissedCount,
+		setupBlocksSeenCount,
+
+		setupReorgsCount,
+		setupReorgDepth,
+
+		setupWalletBalance,
+
+		setupProbesSentCount,
+		setupProbesFailedCount,
+		setupProbesLandedCount,
+		setupProbesLatency,
+
+		setupGasPerBlock,
+		setupGasPerTx,
+		setupGasPricePerTx,
+		setupL1FeePerTx,
+		setupTxPerBlock,
+
+		setupGasPrice,
+	}
 )

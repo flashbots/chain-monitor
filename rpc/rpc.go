@@ -111,3 +111,9 @@ func (rpc *RPC) SendTransaction(ctx context.Context, tx *ethtypes.Transaction) e
 		return rpc.SendTransaction(ctx, tx)
 	})
 }
+
+func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (*ethtypes.Receipt, error) {
+	return callFallbackOnlyWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*ethtypes.Receipt, error) {
+		return rpc.TransactionReceipt(ctx, txHash)
+	})
+}

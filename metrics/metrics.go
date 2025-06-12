@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"math"
 
 	"github.com/flashbots/chain-monitor/config"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -24,23 +23,7 @@ func Setup(
 	cfg *config.Monitor,
 	observe func(ctx context.Context, o otelapi.Observer) error,
 ) error {
-	for _, setup := range []func(context.Context, *config.Monitor) error{
-		setupMeter, // must come first
-		setupBlockMissed,
-		setupBlocksLandedCount,
-		setupBlocksMissedCount,
-		setupBlocksSeenCount,
-		setupReorgsCount,
-		setupReorgDepth,
-		setupWalletBalance,
-		setupProbesSent,
-		setupProbesFailed,
-		setupProbesLanded,
-		setupProbesLatency,
-		setupTxPerBlock,
-		setupGasPerBlock,
-		setupGasPrice,
-	} {
+	for _, setup := range setups {
 		if err := setup(ctx, cfg); err != nil {
 			return err
 		}
@@ -157,7 +140,7 @@ func setupWalletBalance(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesSent(ctx context.Context, _ *config.Monitor) error {
+func setupProbesSentCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_sent_count",
 		otelapi.WithDescription("count of sent probe transactions"),
 	)
@@ -168,7 +151,7 @@ func setupProbesSent(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesFailed(ctx context.Context, _ *config.Monitor) error {
+func setupProbesFailedCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_failed_count",
 		otelapi.WithDescription("count of probe transactions we failed to send"),
 	)
@@ -179,7 +162,7 @@ func setupProbesFailed(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesLanded(ctx context.Context, _ *config.Monitor) error {
+func setupProbesLandedCount(ctx context.Context, _ *config.Monitor) error {
 	m, err := meter.Int64Counter("probes_landed_count",
 		otelapi.WithDescription("count of landed probe transactions"),
 	)
@@ -191,18 +174,6 @@ func setupProbesLanded(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
-	{ // TODO: remove in the future
-		m, err := meter.Int64Histogram("probes_latency",
-			otelapi.WithDescription("latency of landed probe transactions"),
-			otelapi.WithUnit("s"),
-			otelapi.WithExplicitBucketBoundaries(0, 1, 4, 16, 64, 256),
-		)
-		if err != nil {
-			return err
-		}
-		ProbesLatency_Old = m
-	}
-
 	m, err := NewInt64Candlestick("probes_latency_ohlc", "latency of landed probe transactions", "s")
 	if err != nil {
 		return err
@@ -215,18 +186,55 @@ func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
-	{ // TODO: remove in the future
-		m, err := meter.Int64Histogram("tx_per_block",
-			otelapi.WithDescription("count of transactions in a block"),
-			otelapi.WithExplicitBucketBoundaries(0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 92, 128, 184, 256),
-		)
-		if err != nil {
-			return err
-		}
-		TxPerBlock_Old = m
+func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
+	m, err := NewInt64Candlestick("gas_per_block_ohlc", "gas per block", "")
+	if err != nil {
+		return err
 	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
+	GasPerBlock = m
+	return nil
+}
 
+func setupGasPerTx(ctx context.Context, cfg *config.Monitor) error {
+	m, err := NewInt64Candlestick("gas_per_tx_ohlc", "gas per transaction", "")
+	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
+	GasPerTx = m
+	return nil
+}
+
+func setupGasPricePerTx(ctx context.Context, cfg *config.Monitor) error {
+	m, err := NewInt64Candlestick("gas_price_per_tx_ohlc", "gas per transaction", "")
+	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
+	GasPricePerTx = m
+	return nil
+}
+
+func setupL1FeePerTx(ctx context.Context, cfg *config.Monitor) error {
+	m, err := NewInt64Candlestick("l1_fee_per_tx_ohlc", "gas per transaction", "")
+	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
+	L1FeePerTx = m
+	return nil
+}
+
+func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
 	m, err := NewInt64Candlestick("tx_per_block_ohlc", "count of transactions in a block", "")
 	if err != nil {
 		return err
@@ -238,65 +246,9 @@ func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
-	{ // TODO: remove in the future
-		boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
-			buckets := 12
-			base := math.Exp(math.Log(float64(cfg.MaxGasPerBlock)) / float64(buckets-1))
-			res := make([]float64, 0, buckets)
-			for i := range buckets {
-				res = append(res,
-					math.Round(2*math.Pow(base, float64(i)))/2,
-				)
-			}
-			return res
-		}()...)
-
-		m, err := meter.Int64Histogram("gas_per_block",
-			otelapi.WithDescription("gas per a block"),
-			boundaries,
-		)
-		if err != nil {
-			return err
-		}
-		GasPerBlock_Old = m
-	}
-
-	m, err := NewInt64Candlestick("gas_per_block_ohlc", "gas per a block", "")
-	if err != nil {
-		return err
-	}
-	if _, err := m.registerCallback(meter); err != nil {
-		return err
-	}
-	GasPerBlock = m
-	return nil
-}
+// TODO: get rid of below
 
 func setupGasPrice(ctx context.Context, cfg *config.Monitor) error {
-	{ // TODO: remove in the future
-		boundaries := otelapi.WithExplicitBucketBoundaries(func() []float64 {
-			buckets := 12
-			base := math.Exp(math.Log(float64(cfg.MaxGasPrice)) / float64(buckets-1))
-			res := make([]float64, 0, buckets)
-			for i := range buckets {
-				res = append(res,
-					math.Round(2*math.Pow(base, float64(i)))/2,
-				)
-			}
-			return res
-		}()...)
-
-		m, err := meter.Int64Histogram("gas_price",
-			otelapi.WithDescription("gas price"),
-			boundaries,
-		)
-		if err != nil {
-			return err
-		}
-		GasPrice_Old = m
-	}
-
 	m, err := NewInt64Candlestick("gas_price_ohlc", "gas price", "")
 	if err != nil {
 		return err

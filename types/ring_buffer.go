@@ -76,6 +76,7 @@ func (b *RingBuffer[T]) Push(value T) {
 	}
 }
 
+// Pop removes an element from the tail of the buffer and returns its value
 func (b *RingBuffer[T]) Pop() (T, bool) {
 	if b.head == b.tail {
 		var res T // nil value
@@ -93,6 +94,22 @@ func (b *RingBuffer[T]) Pop() (T, bool) {
 	return v, true
 }
 
+// Head returns the value at the head of the buffer
+func (b *RingBuffer[T]) Head() (T, bool) {
+	if b.head == b.tail {
+		var res T // nil value
+		return res, false
+	}
+
+	head := b.head - 1
+	if head < 0 {
+		head += len(b.buf)
+	}
+
+	return b.buf[head], true
+}
+
+// Pick returns an element from the head of the buffer and returns its value
 func (b *RingBuffer[T]) Pick() (T, bool) {
 	if b.head == b.tail {
 		var res T // nil value
