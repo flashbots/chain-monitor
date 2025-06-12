@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Dir    *Dir    `yaml:"dir"`
 	L1     *L1     `yaml:"l1"`
 	L2     *L2     `yaml:"l2"`
 	Log    *Log    `yaml:"log"`
@@ -14,12 +15,16 @@ type Config struct {
 }
 
 func New() *Config {
+	dir := &Dir{}
+
 	return &Config{
+		Dir:    dir,
 		L1:     &L1{},
 		Log:    &Log{},
 		Server: &Server{},
 
 		L2: &L2{
+			Dir:     dir,
 			Monitor: &Monitor{},
 		},
 	}

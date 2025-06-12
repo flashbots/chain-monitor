@@ -1,13 +1,14 @@
 package types_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/flashbots/chain-monitor/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRingBug(t *testing.T) {
+func TestRingBuf(t *testing.T) {
 	b := types.NewRingBuffer[int](42, 4)
 
 	{
@@ -119,6 +120,24 @@ func TestRingBug(t *testing.T) {
 		assert.Equal(t, 45, v)
 
 		v, ok = b.At(46)
+		assert.True(t, ok)
+		assert.Equal(t, 46, v)
+	}
+
+	{
+		bytes, err := json.Marshal(b)
+		assert.NoError(t, err)
+		assert.Equal(t, `{"base":45,"buf":[45,46]}`, string(bytes))
+
+		n := types.NewRingBuffer[int](0)
+		err = json.Unmarshal(bytes, &n)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 2, n.Length())
+		v, ok := n.Pop()
+		assert.True(t, ok)
+		assert.Equal(t, 45, v)
+		v, ok = n.Pop()
 		assert.True(t, ok)
 		assert.Equal(t, 46, v)
 	}

@@ -95,6 +95,7 @@ func (s *Server) Run() error {
 	go func() { // run the server
 		l.Info("Chain monitor server is going up...",
 			zap.String("server_listen_address", s.cfg.Server.ListenAddress),
+			zap.Int("pid", os.Getpid()),
 		)
 		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.failure <- err

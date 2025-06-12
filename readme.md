@@ -38,6 +38,10 @@ USAGE:
    chain-monitor serve [command options]
 
 OPTIONS:
+   DIR
+
+   --dir-persistent path  path to the directory where chain-monitor will store its state b/w restarts (default: disabled) [$CHAIN_MONITOR_DIR_PERSISTENT]
+
    L1
 
    --l1-monitor-wallets list [ --l1-monitor-wallets list ]  list of l1 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L1_MONITOR_WALLETS]

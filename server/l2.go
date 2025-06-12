@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -54,12 +57,6 @@ type L2 struct {
 
 	unwindingByHash    bool
 	unwindByHashHeight uint64
-}
-
-type blockRecord struct {
-	number *big.Int
-	hash   ethcommon.Hash
-	landed bool
 }
 
 func newL2(cfg *config.L2) (*L2, error) {
@@ -152,7 +149,26 @@ func newL2(cfg *config.L2) (*L2, error) {
 		if blockHeight > 0 {
 			l2.blockHeight = blockHeight - 1
 		}
-		l2.blocks = types.NewRingBuffer[blockRecord](int(blockHeight), int(cfg.ReorgWindow/cfg.BlockTime+1))
+		if cfg.Dir.Persistent != "" {
+			fname := filepath.Join(cfg.Dir.Persistent, "blocks.json")
+			if f, err := os.Open(fname); err == nil {
+				blocks := types.NewRingBuffer[blockRecord](0)
+				if err := json.NewDecoder(f).Decode(&blocks); err == nil {
+					l.Info("Loaded the state",
+						zap.String("file_name", fname),
+					)
+					l2.blocks = blocks
+				} else {
+					l.Error("Failed to load the state",
+						zap.Error(err),
+						zap.String("file_name", fname),
+					)
+				}
+			}
+		}
+		if l2.blocks == nil {
+			l2.blocks = types.NewRingBuffer[blockRecord](int(blockHeight), int(cfg.ReorgWindow/cfg.BlockTime+1))
+		}
 	}
 
 	return l2, nil
@@ -180,7 +196,44 @@ func (l2 *L2) run(ctx context.Context) {
 	}()
 }
 
+func (l2 *L2) persist() error {
+	l := zap.L()
+
+	if l2.cfg.Dir.Persistent == "" {
+		return nil
+	}
+
+	if err := os.MkdirAll(l2.cfg.Dir.Persistent, 0750); err != nil {
+		return err
+	}
+
+	fname := filepath.Join(l2.cfg.Dir.Persistent, "blocks.json")
+	f, err := os.Create(fname)
+	if err != nil {
+		return errors.Join(err, f.Close())
+	}
+	defer f.Close()
+
+	if err := json.NewEncoder(f).Encode(l2.blocks); err != nil {
+		return err
+	}
+
+	l.Info("Persisted the state",
+		zap.String("file_name", fname),
+	)
+
+	return nil
+}
+
 func (l2 *L2) stop() {
+	l := zap.L()
+
+	if err := l2.persist(); err != nil {
+		l.Error("Failed to persist the state",
+			zap.Error(err),
+		)
+	}
+
 	l2.ticker.Stop()
 }
 
@@ -204,9 +257,9 @@ func (l2 *L2) processNewBlocks(ctx context.Context) {
 		return
 	}
 
-	if blockHeight < l2.blockHeight {
-		l2.processReorgByHeight(ctx, blockHeight)
-	}
+	// if blockHeight < l2.blockHeight {
+	// 	l2.processReorgByHeight(ctx, blockHeight)
+	// }
 
 	for b := l2.blockHeight + 1; b <= blockHeight; b++ {
 		l.Debug("Processing new l2 block",
@@ -256,12 +309,12 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	if blockNumber > 0 {
 		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
-			if previous.hash.Cmp(block.ParentHash()) != 0 {
+			if previous.Hash.Cmp(block.ParentHash()) != 0 {
 				if !l2.unwindingByHash {
 					l.Info("Chain reorg detected via hash mismatch, starting the unwind...",
 						zap.Uint64("block_number", blockNumber),
 						zap.String("new_parent_hash", block.ParentHash().String()),
-						zap.String("old_parent_hash", previous.hash.String()),
+						zap.String("old_parent_hash", previous.Hash.String()),
 					)
 					l2.unwindingByHash = true
 					l2.unwindByHashHeight = l2.blockHeight
@@ -328,17 +381,17 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	if hasBuilderTx {
 		l2.blocks.Push(blockRecord{
-			number: block.Number(),
-			hash:   block.Hash(),
-			landed: true,
+			Number: block.Number(),
+			Hash:   block.Hash(),
+			Landed: true,
 		})
 		l2.blocksLanded++
 		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
 	} else {
 		l2.blocks.Push(blockRecord{
-			number: block.Number(),
-			hash:   block.Hash(),
-			landed: false,
+			Number: block.Number(),
+			Hash:   block.Hash(),
+			Landed: false,
 		})
 		l2.blocksMissed++
 		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
@@ -370,31 +423,31 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 	for l2.blocks.Length() > 0 {
 		br, _ := l2.blocks.Pick()
 		l2.blocksSeen--
-		if br.landed {
+		if br.Landed {
 			l2.blocksLanded--
 		} else {
 			l2.blocksMissed--
 			l.Info("Missed block was reorgd (hash)",
-				zap.Uint64("block_number", br.number.Uint64()),
+				zap.Uint64("block_number", br.Number.Uint64()),
 				zap.Int64("blocks_landed", l2.blocksLanded),
 				zap.Int64("blocks_missed", l2.blocksMissed),
 				zap.Int64("blocks_seen", l2.blocksSeen),
 			)
 		}
 
-		block, err := l2.rpc.BlockByNumber(ctx, br.number)
+		block, err := l2.rpc.BlockByNumber(ctx, br.Number)
 		if err != nil {
 			l.Warn("Failed to request block by number, skipping this round of unwind...",
 				zap.Error(err),
-				zap.String("number", br.number.String()),
+				zap.String("number", br.Number.String()),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.Rpc),
 			)
 			return err
 		}
-		l2.blockHeight = br.number.Uint64() - 1
+		l2.blockHeight = br.Number.Uint64() - 1
 
-		if block.Hash().Cmp(br.hash) == 0 {
+		if block.Hash().Cmp(br.Hash) == 0 {
 			return nil
 		}
 	}
@@ -402,56 +455,56 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 	return nil
 }
 
-func (l2 *L2) processReorgByHeight(ctx context.Context, newBlockHeight uint64) {
-	l := logutils.LoggerFromContext(ctx)
+// func (l2 *L2) processReorgByHeight(ctx context.Context, newBlockHeight uint64) {
+// 	l := logutils.LoggerFromContext(ctx)
 
-	if newBlockHeight == 0 {
-		newBlockHeight = 1
-	}
+// 	if newBlockHeight == 0 {
+// 		newBlockHeight = 1
+// 	}
 
-	depth := l2.blockHeight - newBlockHeight + 1
+// 	depth := l2.blockHeight - newBlockHeight + 1
 
-	adjustSeen := 0
-	adjustLanded := 0
-	adjustMissed := 0
+// 	adjustSeen := 0
+// 	adjustLanded := 0
+// 	adjustMissed := 0
 
-	for b := l2.blockHeight; b >= newBlockHeight && l2.blocks.Length() > 0; b-- {
-		if br, ok := l2.blocks.Pick(); ok {
-			adjustSeen++
-			if br.landed {
-				adjustLanded++
-			} else {
-				adjustMissed++
-				l.Info("Missed block was reorgd (height)",
-					zap.Uint64("block_number", b),
-					zap.Int64("blocks_landed", l2.blocksLanded-int64(adjustLanded)),
-					zap.Int64("blocks_missed", l2.blocksMissed-int64(adjustMissed)),
-					zap.Int64("blocks_seen", l2.blocksSeen-int64(adjustSeen)),
-				)
-			}
-		}
-	}
+// 	for b := l2.blockHeight; b >= newBlockHeight && l2.blocks.Length() > 0; b-- {
+// 		if br, ok := l2.blocks.Pick(); ok {
+// 			adjustSeen++
+// 			if br.Landed {
+// 				adjustLanded++
+// 			} else {
+// 				adjustMissed++
+// 				l.Info("Missed block was reorgd (height)",
+// 					zap.Uint64("block_number", b),
+// 					zap.Int64("blocks_landed", l2.blocksLanded-int64(adjustLanded)),
+// 					zap.Int64("blocks_missed", l2.blocksMissed-int64(adjustMissed)),
+// 					zap.Int64("blocks_seen", l2.blocksSeen-int64(adjustSeen)),
+// 				)
+// 			}
+// 		}
+// 	}
 
-	l2.blocksSeen -= int64(adjustSeen)
-	l2.blocksLanded -= int64(adjustLanded)
-	l2.blocksMissed -= int64(adjustMissed)
+// 	l2.blocksSeen -= int64(adjustSeen)
+// 	l2.blocksLanded -= int64(adjustLanded)
+// 	l2.blocksMissed -= int64(adjustMissed)
 
-	metrics.ReorgsCount.Add(ctx, 1)
-	metrics.ReorgDepth.Record(ctx, int64(depth))
+// 	metrics.ReorgsCount.Add(ctx, 1)
+// 	metrics.ReorgDepth.Record(ctx, int64(depth))
 
-	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
-	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
-	metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
+// 	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
+// 	metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
+// 	metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 
-	l.Warn("Chain reorg detected via block height",
-		zap.Uint64("reorg_depth", depth),
-		zap.Uint64("old_block_number", l2.blockHeight),
-		zap.Uint64("new_block_number", newBlockHeight-1),
-	)
+// 	l.Warn("Chain reorg detected via block height",
+// 		zap.Uint64("reorg_depth", depth),
+// 		zap.Uint64("old_block_number", l2.blockHeight),
+// 		zap.Uint64("new_block_number", newBlockHeight-1),
+// 	)
 
-	l2.blocks.Forget(adjustSeen)
-	l2.blockHeight = newBlockHeight - 1
-}
+// 	l2.blocks.Forget(adjustSeen)
+// 	l2.blockHeight = newBlockHeight - 1
+// }
 
 func (l2 *L2) isBuilderTx(
 	ctx context.Context,

@@ -1,5 +1,10 @@
 package types
 
+import (
+	"encoding/json"
+	"strconv"
+)
+
 type RingBuffer[T any] struct {
 	buf []T
 
@@ -134,4 +139,51 @@ func (b *RingBuffer[T]) At(idx int) (T, bool) {
 	}
 
 	return b.buf[index], true
+}
+
+func (b *RingBuffer[T]) MarshalJSON() ([]byte, error) {
+	var buf []T
+
+	switch {
+	case b.head >= b.tail:
+		//  0   1   2   3
+		//  t       h      : 2 elements
+		buf = b.buf[b.tail:b.head]
+
+	case b.head < b.tail:
+		//  0   1   2   3
+		//  h           t  : 1 element
+		buf = b.buf[b.tail:len(b.buf)]
+		buf = append(buf, b.buf[:b.head]...)
+	}
+
+	bytes, err := json.Marshal(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(append([]byte(`{"base":`+strconv.Itoa(b.base)+`,"buf":`), bytes...), byte('}')), nil
+}
+
+func (b *RingBuffer[T]) UnmarshalJSON(data []byte) error {
+	raw := &struct {
+		Base int
+		Buf  json.RawMessage
+	}{}
+	if err := json.Unmarshal(data, raw); err != nil {
+		return err
+	}
+
+	buf := make([]T, 0)
+	if err := json.Unmarshal(raw.Buf, &buf); err != nil {
+		return err
+	}
+	var _nil T
+	buf = append(buf, _nil)
+
+	b.base = raw.Base
+	b.buf = buf
+	b.head = len(buf) - 1
+
+	return nil
 }

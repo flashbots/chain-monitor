@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	categoryEth    = "l1"
+	categoryDir    = "dir"
+	categoryL1     = "l1"
 	categoryL2     = "l2"
 	categoryServer = "server"
 )
@@ -24,29 +25,40 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	l2RpcFallback := &cli.StringSlice{}
 	l2WalletAddresses := &cli.StringSlice{}
 
+	dirFlags := []cli.Flag{
+		&cli.StringFlag{ // --dir-persistent
+			Category:    strings.ToUpper(categoryDir),
+			DefaultText: "disabled",
+			Destination: &cfg.Dir.Persistent,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryDir) + "_PERSISTENT"},
+			Name:        categoryDir + "-persistent",
+			Usage:       "`path` to the directory where chain-monitor will store its state b/w restarts",
+		},
+	}
+
 	l1Flags := []cli.Flag{
 		&cli.StringFlag{ // --l1-rpc
-			Category:    strings.ToUpper(categoryEth),
+			Category:    strings.ToUpper(categoryL1),
 			Destination: &cfg.L1.Rpc,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_RPC"},
-			Name:        categoryEth + "-rpc",
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_RPC"},
+			Name:        categoryL1 + "-rpc",
 			Usage:       "`url` of l1 rpc endpoint",
 			Value:       "http://127.0.0.1:8545",
 		},
 
 		&cli.StringSliceFlag{ // --l1-monitor-wallets
-			Category:    strings.ToUpper(categoryEth),
+			Category:    strings.ToUpper(categoryL1),
 			Destination: l1RpcFallback,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_RPC_FALLBACK"},
-			Name:        categoryEth + "-rpc-fallback",
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_RPC_FALLBACK"},
+			Name:        categoryL1 + "-rpc-fallback",
 			Usage:       "`url` of fallback l1 rpc endpoint",
 		},
 
 		&cli.StringSliceFlag{ // --l1-monitor-wallets
-			Category:    strings.ToUpper(categoryEth),
+			Category:    strings.ToUpper(categoryL1),
 			Destination: l1WalletAddresses,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryEth) + "_MONITOR_WALLETS"},
-			Name:        categoryEth + "-monitor-wallets",
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_MONITOR_WALLETS"},
+			Name:        categoryL1 + "-monitor-wallets",
 			Usage:       "`list` of l1 wallet addresses to monitor the balances of",
 		},
 	}
@@ -178,6 +190,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	flags := slices.Concat(
+		dirFlags,
 		l1Flags,
 		l2Flags,
 		serverFlags,

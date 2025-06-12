@@ -11,6 +11,8 @@ import (
 )
 
 type L2 struct {
+	Dir *Dir `yaml:"-"`
+
 	BlockTime   time.Duration `yaml:"block_time"`
 	ReorgWindow time.Duration `yaml:"reorg_window"`
 	Rpc         string        `yaml:"rpc"`

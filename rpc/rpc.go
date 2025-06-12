@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -70,9 +71,15 @@ func (rpc *RPC) NetworkID(ctx context.Context) (*big.Int, error) {
 }
 
 func (rpc *RPC) BlockNumber(ctx context.Context) (uint64, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (uint64, error) {
+	blocks, err := callEveryoneWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (uint64, error) {
 		return rpc.BlockNumber(ctx)
 	})
+
+	if len(blocks) == 0 {
+		return 0, err
+	}
+
+	return slices.Max(blocks), nil
 }
 
 func (rpc *RPC) BlockByNumber(ctx context.Context, number *big.Int) (*ethtypes.Block, error) {
