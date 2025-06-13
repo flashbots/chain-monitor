@@ -12,7 +12,7 @@ import (
 func callEveryoneWithResult[R any](
 	ctx context.Context,
 	rpc *RPC,
-	call func(context.Context, *ethclient.Client) (R, error),
+	call func(ctx context.Context, rpc *ethclient.Client) (R, error),
 ) ([]R, error) {
 	var (
 		mx sync.Mutex
@@ -71,35 +71,10 @@ func callEveryoneWithResult[R any](
 	return res, utils.FlattenErrors(errs)
 }
 
-func callFallbackOnlyWithResult[R any](
+func callMainThenFallback(
 	ctx context.Context,
 	rpc *RPC,
-	call func(context.Context, *ethclient.Client) (R, error),
-) (R, error) {
-	errs := make([]error, 0, len(rpc.fallback))
-
-	for idx, fallback := range rpc.fallback {
-		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
-		defer cancel()
-
-		res, err := call(_ctx, fallback)
-		if err == nil {
-			return res, nil
-		}
-
-		errs = append(errs, fmt.Errorf("%s: %w",
-			rpc.url.fallback[idx], err,
-		))
-	}
-
-	var _nil R
-	return _nil, utils.FlattenErrors(errs)
-}
-
-func callWithFallback(
-	ctx context.Context,
-	rpc *RPC,
-	call func(context.Context, *ethclient.Client) error,
+	call func(ctx context.Context, rpc *ethclient.Client) error,
 ) error {
 	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 	defer cancel()
@@ -131,10 +106,10 @@ func callWithFallback(
 	return utils.FlattenErrors(errs)
 }
 
-func callWithFallbackAndResult[R any](
+func callMainThenFallbackWithResult[R any](
 	ctx context.Context,
 	rpc *RPC,
-	call func(context.Context, *ethclient.Client) (R, error),
+	call func(ctx context.Context, rpc *ethclient.Client) (R, error),
 ) (R, error) {
 	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 	defer cancel()
@@ -162,6 +137,42 @@ func callWithFallbackAndResult[R any](
 			rpc.url.fallback[idx], err,
 		))
 	}
+
+	var _nil R
+	return _nil, utils.FlattenErrors(errs)
+}
+
+func callFallbackThenMainWithResult[R any](
+	ctx context.Context,
+	rpc *RPC,
+	call func(ctx context.Context, rpc *ethclient.Client) (R, error),
+) (R, error) {
+	errs := make([]error, 0, len(rpc.fallback))
+
+	for idx, fallback := range rpc.fallback {
+		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
+		defer cancel()
+
+		res, err := call(_ctx, fallback)
+		if err == nil {
+			return res, nil
+		}
+
+		errs = append(errs, fmt.Errorf("%s: %w",
+			rpc.url.fallback[idx], err,
+		))
+	}
+
+	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
+	defer cancel()
+
+	res, err := call(_ctx, rpc.main)
+	if err == nil {
+		return res, nil
+	}
+	errs = append(errs, fmt.Errorf("%s: %w",
+		rpc.url.main, err,
+	))
 
 	var _nil R
 	return _nil, utils.FlattenErrors(errs)

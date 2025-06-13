@@ -154,13 +154,14 @@ func newL2(cfg *config.L2) (*L2, error) {
 			if f, err := os.Open(fname); err == nil {
 				blocks := types.NewRingBuffer[blockRecord](0)
 				if err := json.NewDecoder(f).Decode(&blocks); err == nil {
-					l.Info("Loaded the state",
-						zap.String("file_name", fname),
-					)
 					l2.blocks = blocks
 					if head, ok := blocks.Head(); ok {
 						l2.blockHeight = head.Number.Uint64()
 					}
+					l.Info("Loaded the state",
+						zap.String("file_name", fname),
+						zap.Uint64("block_height", l2.blockHeight),
+					)
 				} else {
 					l.Error("Failed to load the state",
 						zap.Error(err),
@@ -352,6 +353,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	hasBuilderTx := false
 	expectedBuilderTxData := []byte(fmt.Sprintf("Block Number: %s", block.Number().String()))
 
+	var failedTxCount int64
 	for _, tx := range block.Transactions() {
 		if l2.isBuilderTx(ctx, block, tx, expectedBuilderTxData) {
 			if !hasBuilderTx {
@@ -382,6 +384,9 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		if receipt, err := l2.rpc.TransactionReceipt(ctx, tx.Hash()); err == nil {
 			if receipt != nil {
 				metrics.GasPerTx.Record(ctx, int64(receipt.GasUsed))
+				if receipt.Status == ethtypes.ReceiptStatusFailed {
+					failedTxCount++
+				}
 			}
 		} else {
 			l.Warn("Failed to get transaction receipt",
@@ -390,6 +395,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			)
 		}
 	}
+	metrics.FailedTxPerBlock.Record(ctx, failedTxCount)
 
 	if hasBuilderTx {
 		l2.blocks.Push(blockRecord{

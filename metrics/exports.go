@@ -24,11 +24,11 @@ var (
 	ProbesLandedCount otelapi.Int64Counter
 	ProbesLatency     *Int64Candlestick
 
-	GasPerBlock   *Int64Candlestick
-	GasPerTx      *Int64Candlestick
-	GasPricePerTx *Int64Candlestick
-	L1FeePerTx    *Int64Candlestick
-	TxPerBlock    *Int64Candlestick
+	FailedTxPerBlock *Int64Candlestick
+	GasPerBlock      *Int64Candlestick
+	GasPerTx         *Int64Candlestick
+	GasPricePerTx    *Int64Candlestick
+	TxPerBlock       *Int64Candlestick
 
 	// TODO: get rid of this
 	GasPrice *Int64Candlestick
@@ -54,10 +54,10 @@ var (
 		setupProbesLandedCount,
 		setupProbesLatency,
 
+		setupFailedTxPerBlock,
 		setupGasPerBlock,
 		setupGasPerTx,
 		setupGasPricePerTx,
-		setupL1FeePerTx,
 		setupTxPerBlock,
 
 		setupGasPrice,

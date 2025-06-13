@@ -186,6 +186,18 @@ func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
+func setupFailedTxPerBlock(ctx context.Context, cfg *config.Monitor) error {
+	m, err := NewInt64Candlestick("failed_tx_per_block_ohlc", "failed transactions per block", "")
+	if err != nil {
+		return err
+	}
+	if _, err := m.registerCallback(meter); err != nil {
+		return err
+	}
+	FailedTxPerBlock = m
+	return nil
+}
+
 func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
 	m, err := NewInt64Candlestick("gas_per_block_ohlc", "gas per block", "")
 	if err != nil {
@@ -219,18 +231,6 @@ func setupGasPricePerTx(ctx context.Context, cfg *config.Monitor) error {
 		return err
 	}
 	GasPricePerTx = m
-	return nil
-}
-
-func setupL1FeePerTx(ctx context.Context, cfg *config.Monitor) error {
-	m, err := NewInt64Candlestick("l1_fee_per_tx_ohlc", "gas per transaction", "")
-	if err != nil {
-		return err
-	}
-	if _, err := m.registerCallback(meter); err != nil {
-		return err
-	}
-	L1FeePerTx = m
 	return nil
 }
 

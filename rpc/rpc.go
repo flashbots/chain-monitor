@@ -65,7 +65,7 @@ func (rpc *RPC) Close() {
 }
 
 func (rpc *RPC) NetworkID(ctx context.Context) (*big.Int, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
+	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
 		return rpc.NetworkID(ctx)
 	})
 }
@@ -83,37 +83,37 @@ func (rpc *RPC) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 func (rpc *RPC) BlockByNumber(ctx context.Context, number *big.Int) (*ethtypes.Block, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*ethtypes.Block, error) {
+	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*ethtypes.Block, error) {
 		return rpc.BlockByNumber(ctx, number)
 	})
 }
 
 func (rpc *RPC) BalanceAt(ctx context.Context, account ethcommon.Address, blockNumber *big.Int) (*big.Int, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
+	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
 		return rpc.BalanceAt(ctx, account, blockNumber)
 	})
 }
 
 func (rpc *RPC) NonceAt(ctx context.Context, account ethcommon.Address, blockNumber *big.Int) (uint64, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (uint64, error) {
+	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (uint64, error) {
 		return rpc.NonceAt(ctx, account, blockNumber)
 	})
 }
 
 func (rpc *RPC) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	return callWithFallbackAndResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
+	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
 		return rpc.SuggestGasPrice(ctx)
 	})
 }
 
 func (rpc *RPC) SendTransaction(ctx context.Context, tx *ethtypes.Transaction) error {
-	return callWithFallback(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) error {
+	return callMainThenFallback(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) error {
 		return rpc.SendTransaction(ctx, tx)
 	})
 }
 
 func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (*ethtypes.Receipt, error) {
-	return callFallbackOnlyWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*ethtypes.Receipt, error) {
+	return callFallbackThenMainWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*ethtypes.Receipt, error) {
 		return rpc.TransactionReceipt(ctx, txHash)
 	})
 }
