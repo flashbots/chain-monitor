@@ -58,6 +58,7 @@ OPTIONS:
    --l2-monitor-tx-gas-limit limit                          l2 monitor transactions gas limit (default: 1000000) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_LIMIT]
    --l2-monitor-tx-gas-price-adjustment %                   l2 monitor transactions gas price adjustment in % (default: 10) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_PRICE_ADJUSTMENT]
    --l2-monitor-tx-gas-price-cap wei                        l2 monitor transactions gas price cap in wei (default: 10) [$CHAIN_MONITOR_L2_MONITOR_TX_GAS_PRICE_CAP]
+   --l2-monitor-tx-receipts                                 l2 monitor transactions receipts (can be slow on busy chains) (default: false) [$CHAIN_MONITOR_L2_MONITOR_TX_RECEIPTS]
    --l2-monitor-wallets list [ --l2-monitor-wallets list ]  list of l2 wallet addresses to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLETS]
    --l2-reorg-window duration                               max duration of block history to keep in memory for the l2 reorg adjustments (default: 24h0m0s) [$CHAIN_MONITOR_L2_REORG_WINDOW]
    --l2-rpc url                                             url of l2 rpc endpoint (default: "http://127.0.0.1:8645") [$CHAIN_MONITOR_L2_RPC]

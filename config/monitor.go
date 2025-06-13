@@ -17,6 +17,8 @@ type Monitor struct {
 	TxGasLimit           uint64 `yaml:"tx_gas_limit"`
 	TxGasPriceAdjustment int64  `yaml:"tx_gas_price_adjustment"`
 	TxGasPriceCap        int64  `yaml:"tx_gas_price_cap"`
+
+	TxReceipts bool `yaml:"tx_receipts"`
 }
 
 var (

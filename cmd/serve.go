@@ -125,6 +125,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       10,
 		},
 
+		&cli.BoolFlag{ // --l2-monitor-tx-receipts
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.Monitor.TxReceipts,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_RECEIPTS"},
+			Name:        categoryL2 + "-monitor-tx-receipts",
+			Usage:       "l2 monitor transactions receipts (can be slow on busy chains)",
+			Value:       false,
+		},
+
 		&cli.Int64Flag{ // --l2-monitor-tx-gas-price-cap
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.Monitor.TxGasPriceCap,

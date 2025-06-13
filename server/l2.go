@@ -381,18 +381,20 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			metrics.GasPricePerTx.Record(ctx, gasPrice)
 		}
 
-		if receipt, err := l2.rpc.TransactionReceipt(ctx, tx.Hash()); err == nil {
-			if receipt != nil {
-				metrics.GasPerTx.Record(ctx, int64(receipt.GasUsed))
-				if receipt.Status == ethtypes.ReceiptStatusFailed {
-					failedTxCount++
+		if l2.cfg.Monitor.TxReceipts {
+			if receipt, err := l2.rpc.TransactionReceipt(ctx, tx.Hash()); err == nil {
+				if receipt != nil {
+					metrics.GasPerTx.Record(ctx, int64(receipt.GasUsed))
+					if receipt.Status == ethtypes.ReceiptStatusFailed {
+						failedTxCount++
+					}
 				}
+			} else {
+				l.Warn("Failed to get transaction receipt",
+					zap.Error(err),
+					zap.String("tx", tx.Hash().Hex()),
+				)
 			}
-		} else {
-			l.Warn("Failed to get transaction receipt",
-				zap.Error(err),
-				zap.String("tx", tx.Hash().Hex()),
-			)
 		}
 	}
 	metrics.FailedTxPerBlock.Record(ctx, failedTxCount)
