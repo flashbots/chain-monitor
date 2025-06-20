@@ -326,21 +326,21 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 				l.Debug("Continuing the reorg unwind...")
 				return l2.processReorgByHash(ctx)
 			}
+		}
 
-			if l2.unwindingByHash {
-				depth := l2.unwindByHashHeight - blockNumber
+		if l2.unwindingByHash {
+			depth := l2.unwindByHashHeight - blockNumber
 
-				metrics.ReorgsCount.Add(ctx, 1)
-				metrics.ReorgDepth.Record(ctx, int64(depth))
+			metrics.ReorgsCount.Add(ctx, 1)
+			metrics.ReorgDepth.Record(ctx, int64(depth))
 
-				l.Info("Finished the unwind",
-					zap.Uint64("reorg_depth", depth),
-					zap.Uint64("old_block_number", l2.unwindByHashHeight),
-				)
+			l.Info("Finished the unwind",
+				zap.Uint64("reorg_depth", depth),
+				zap.Uint64("old_block_number", l2.unwindByHashHeight),
+			)
 
-				l2.unwindingByHash = false
-				l2.unwindByHashHeight = 0
-			}
+			l2.unwindingByHash = false
+			l2.unwindByHashHeight = 0
 		}
 	}
 
