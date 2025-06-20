@@ -45,15 +45,16 @@ type L2 struct {
 	signer      ethtypes.EIP155Signer
 	wallets     map[string]ethcommon.Address
 
-	blockHeight  uint64
-	blocks       *types.RingBuffer[blockRecord]
+	blockHeight uint64
+	blocks      *types.RingBuffer[blockRecord]
+
 	blocksLanded int64
 	blocksMissed int64
 	blocksSeen   int64
 
 	processBlockFailuresCount uint
 
-	nonce uint64
+	monitorNonce uint64
 
 	unwindingByHash    bool
 	unwindByHashHeight uint64
@@ -404,7 +405,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		)
 
 	default:
-		l.Warn("More than 1 builder transaction found in a block",
+		l.Debug("More than 1 builder transaction found in a block",
 			zap.Int("count", int(builderTxCount)),
 		)
 		fallthrough
@@ -608,7 +609,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.Monitor.TxGasPriceCap))
 	}
 
-	if l2.nonce == 0 { // get the nonce
+	if l2.monitorNonce == 0 { // get the nonce
 		nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr, nil)
 		if err != nil {
 			l.Warn("Failed to request a nonce",
@@ -622,7 +623,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			))
 			return
 		}
-		l2.nonce = nonce
+		l2.monitorNonce = nonce
 	}
 
 tryingNonces:
@@ -631,7 +632,7 @@ tryingNonces:
 		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
 
 		tx := ethtypes.NewTransaction(
-			l2.nonce,
+			l2.monitorNonce,
 			ethcommon.Address{},
 			nil,
 			l2.cfg.Monitor.TxGasLimit,
@@ -654,7 +655,7 @@ tryingNonces:
 		err = l2.rpc.SendTransaction(ctx, signedTx)
 		if err == nil {
 			metrics.ProbesSentCount.Add(ctx, 1)
-			l2.nonce++
+			l2.monitorNonce++
 			return
 		}
 
@@ -663,7 +664,7 @@ tryingNonces:
 				zap.Error(errors.Join(err, ctxErr)),
 				zap.String("address", l2.monitorAddr.String()),
 				zap.String("to", tx.To().String()),
-				zap.Uint64("nonce", l2.nonce),
+				zap.Uint64("nonce", l2.monitorNonce),
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.Rpc),
 			)
@@ -673,11 +674,11 @@ tryingNonces:
 			return // irrecoverable error (for now, at least) => no point in trying other nonces
 		}
 
-		l.Error("Failed to send a transaction",
+		l.Error("Failed to send monitor transaction",
 			zap.Error(err),
 			zap.String("address", l2.monitorAddr.String()),
 			zap.String("to", tx.To().String()),
-			zap.Uint64("nonce", l2.nonce),
+			zap.Uint64("nonce", l2.monitorNonce),
 			zap.String("kind", "l2"),
 			zap.String("rpc", l2.cfg.Rpc),
 		)
@@ -690,11 +691,11 @@ tryingNonces:
 			return // irrecoverable error
 
 		case strings.Contains(err.Error(), "already known"):
-			l2.nonce++ // there's already a tx with this nonce => try next one
+			l2.monitorNonce++ // there's already a tx with this nonce => try next one
 			continue tryingNonces
 
 		case strings.Contains(err.Error(), "replacement transaction underpriced"):
-			l2.nonce++ // there's already a tx with this nonce => try next one
+			l2.monitorNonce++ // there's already a tx with this nonce => try next one
 			continue tryingNonces
 
 		case strings.Contains(err.Error(), "nonce too low"):
@@ -711,7 +712,7 @@ tryingNonces:
 				))
 				return
 			}
-			l2.nonce = nonce
+			l2.monitorNonce = nonce
 
 			continue tryingNonces
 		}
