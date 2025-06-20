@@ -333,7 +333,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 				metrics.ReorgsCount.Add(ctx, 1)
 				metrics.ReorgDepth.Record(ctx, int64(depth))
 
-				l.Warn("Chain reorg detected via hash mismatch",
+				l.Info("Finished the unwind",
 					zap.Uint64("reorg_depth", depth),
 					zap.Uint64("old_block_number", l2.unwindByHashHeight),
 				)
@@ -468,6 +468,10 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 		if block.Hash().Cmp(br.Hash) == 0 {
 			return nil
 		}
+
+		l.Info("Unwinding...",
+			zap.Uint64("block_number", l2.blockHeight),
+		)
 	}
 
 	return nil
