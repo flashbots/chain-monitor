@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	metricsNamespace = "chain-monitor"
+	metricsNamespace = "chain_monitor"
 )
 
 var (
