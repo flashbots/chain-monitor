@@ -208,10 +208,12 @@ func (l2 *L2) run(ctx context.Context) {
 	}()
 
 	if l2.monitorResetTicker != nil {
-		for {
-			<-l2.monitorResetTicker.C
-			l2.checkAndResetProbeTxNonce(ctx)
-		}
+		go func() {
+			for {
+				<-l2.monitorResetTicker.C
+				l2.checkAndResetProbeTxNonce(ctx)
+			}
+		}()
 	}
 }
 
