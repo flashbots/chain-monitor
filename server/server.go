@@ -162,17 +162,9 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) observe(ctx context.Context, o otelapi.Observer) error {
-	errL1 := s.l1.observeWallets(ctx, o)
-	errL2 := s.l2.observeWallets(ctx, o)
-
-	switch {
-	case errL1 != nil && errL2 != nil:
-		return errors.Join(errL1, errL2)
-	case errL1 != nil:
-		return errL1
-	case errL2 != nil:
-		return errL2
-	}
-
-	return nil
+	return errors.Join(
+		s.l1.observeWallets(ctx, o),
+		s.l2.observeWallets(ctx, o),
+		s.l2.observerProbes(ctx, o),
+	)
 }

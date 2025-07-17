@@ -107,6 +107,24 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Usage:       "l2 private `key` to send tx inclusion latency probes with",
 		},
 
+		&cli.DurationFlag{ // --l2-monitor-reset-interval
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.Monitor.ResetInterval,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_RESET_INTERVAL"},
+			Name:        categoryL2 + "-monitor-reset-interval",
+			Usage:       "`interval` at which to conditionally reset l2 monitor nonce",
+			Value:       10 * time.Minute,
+		},
+
+		&cli.Int64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.Monitor.ResetThreshold,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_RESET_THRESHOLD"},
+			Name:        categoryL2 + "-monitor-reset-threshold",
+			Usage:       "a `difference` probeTxSent - probeTxLanded that should trigger monitor tx nonce reset",
+			Value:       60,
+		},
+
 		&cli.Uint64Flag{ // --l2-monitor-tx-gas-limit
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.Monitor.TxGasLimit,

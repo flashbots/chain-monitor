@@ -30,6 +30,9 @@ func Setup(
 	}
 
 	_, err := meter.RegisterCallback(observe,
+		ProbesSentCount,
+		ProbesFailedCount,
+		ProbesLandedCount,
 		WalletBalance,
 	)
 	if err != nil {
@@ -141,7 +144,7 @@ func setupWalletBalance(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupProbesSentCount(ctx context.Context, _ *config.Monitor) error {
-	m, err := meter.Int64Counter("probes_sent_count",
+	m, err := meter.Int64ObservableCounter("probes_sent_count",
 		otelapi.WithDescription("count of sent probe transactions"),
 	)
 	if err != nil {
@@ -152,7 +155,7 @@ func setupProbesSentCount(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupProbesFailedCount(ctx context.Context, _ *config.Monitor) error {
-	m, err := meter.Int64Counter("probes_failed_count",
+	m, err := meter.Int64ObservableCounter("probes_failed_count",
 		otelapi.WithDescription("count of probe transactions we failed to send"),
 	)
 	if err != nil {
@@ -163,7 +166,7 @@ func setupProbesFailedCount(ctx context.Context, _ *config.Monitor) error {
 }
 
 func setupProbesLandedCount(ctx context.Context, _ *config.Monitor) error {
-	m, err := meter.Int64Counter("probes_landed_count",
+	m, err := meter.Int64ObservableCounter("probes_landed_count",
 		otelapi.WithDescription("count of landed probe transactions"),
 	)
 	if err != nil {

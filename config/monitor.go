@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/flashbots/chain-monitor/utils"
@@ -13,6 +14,9 @@ type Monitor struct {
 
 	MaxGasPerBlock uint64 `yaml:"max_gas_per_block"`
 	MaxGasPrice    uint64 `yaml:"max_gas_price"`
+
+	ResetInterval  time.Duration `yaml:"reset_interval"`
+	ResetThreshold int64         `yaml:"reset_threshold"`
 
 	TxGasLimit           uint64 `yaml:"tx_gas_limit"`
 	TxGasPriceAdjustment int64  `yaml:"tx_gas_price_adjustment"`

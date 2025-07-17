@@ -54,7 +54,12 @@ type L2 struct {
 
 	processBlockFailuresCount uint
 
-	monitorNonce uint64
+	monitorNonce       uint64
+	monitorResetTicker *time.Ticker
+
+	monitorProbesFailedCount int64
+	monitorProbesLandedCount int64
+	monitorProbesSentCount   int64
 
 	unwindingByHash    bool
 	unwindByHashHeight uint64
@@ -96,6 +101,8 @@ func newL2(cfg *config.L2) (*L2, error) {
 		}
 		l2.monitorKey = monitorKey
 		l2.monitorAddr = crypto.PubkeyToAddress(monitorKey.PublicKey)
+
+		l2.monitorResetTicker = time.NewTicker(cfg.Monitor.ResetInterval)
 	}
 
 	for name, addrStr := range cfg.WalletAddresses { // wallets
@@ -199,6 +206,13 @@ func (l2 *L2) run(ctx context.Context) {
 			tick()
 		}
 	}()
+
+	if l2.monitorResetTicker != nil {
+		for {
+			<-l2.monitorResetTicker.C
+			l2.checkAndResetProbeTxNonce(ctx)
+		}
+	}
 }
 
 func (l2 *L2) persist() error {
@@ -240,6 +254,9 @@ func (l2 *L2) stop() {
 	}
 
 	l2.ticker.Stop()
+	if l2.monitorResetTicker != nil {
+		l2.monitorResetTicker.Stop()
+	}
 }
 
 func (l2 *L2) processNewBlocks(ctx context.Context) {
@@ -362,6 +379,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 					zap.Uint64("sent", sent),
 					zap.Uint64("landed", block.Time()),
 				)
+				l2.monitorProbesLandedCount++
 				metrics.ProbesLatency.Record(ctx, int64(latency))
 			}
 		}
@@ -584,6 +602,18 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	return utils.FlattenErrors(errs)
 }
 
+func (l2 *L2) observerProbes(ctx context.Context, o otelapi.Observer) error {
+	if l2.cfg.Monitor.PrivateKey == "" {
+		return nil
+	}
+
+	o.ObserveInt64(metrics.ProbesFailedCount, l2.monitorProbesFailedCount)
+	o.ObserveInt64(metrics.ProbesLandedCount, l2.monitorProbesLandedCount)
+	o.ObserveInt64(metrics.ProbesSentCount, l2.monitorProbesSentCount)
+
+	return nil
+}
+
 func (l2 *L2) sendProbeTx(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
@@ -601,9 +631,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.Rpc),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
-			))
+			l2.monitorProbesFailedCount++
 			return
 		}
 
@@ -622,9 +650,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.Rpc),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
-			))
+			l2.monitorProbesFailedCount++
 			return
 		}
 		l2.monitorNonce = nonce
@@ -650,15 +676,13 @@ tryingNonces:
 				zap.Error(err),
 				zap.String("address", l2.monitorAddr.String()),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("signature-failure")},
-			))
+			l2.monitorProbesFailedCount++
 			return
 		}
 
 		err = l2.rpc.SendTransaction(ctx, signedTx)
 		if err == nil {
-			metrics.ProbesSentCount.Add(ctx, 1)
+			l2.monitorProbesSentCount++
 			l2.monitorNonce++
 			return
 		}
@@ -672,9 +696,7 @@ tryingNonces:
 				zap.String("kind", "l2"),
 				zap.String("rpc", l2.cfg.Rpc),
 			)
-			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
-			))
+			l2.monitorProbesFailedCount++
 			return // irrecoverable error (for now, at least) => no point in trying other nonces
 		}
 
@@ -689,9 +711,7 @@ tryingNonces:
 
 		switch {
 		case strings.Contains(err.Error(), "insufficient funds"):
-			metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-				attribute.KeyValue{Key: "reason", Value: attribute.StringValue("insufficient-funds")},
-			))
+			l2.monitorProbesFailedCount++
 			return // irrecoverable error
 
 		case strings.Contains(err.Error(), "already known"):
@@ -711,9 +731,7 @@ tryingNonces:
 					zap.String("kind", "l2"),
 					zap.String("rpc", l2.cfg.Rpc),
 				)
-				metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-					attribute.KeyValue{Key: "reason", Value: attribute.StringValue("rpc-failure")},
-				))
+				l2.monitorProbesFailedCount++
 				return
 			}
 			l2.monitorNonce = nonce
@@ -721,13 +739,25 @@ tryingNonces:
 			continue tryingNonces
 		}
 
-		metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-			attribute.KeyValue{Key: "reason", Value: attribute.StringValue("unknown")},
-		))
+		l2.monitorProbesFailedCount++
 		return
 	}
 
-	metrics.ProbesFailedCount.Add(ctx, 1, otelapi.WithAttributes(
-		attribute.KeyValue{Key: "reason", Value: attribute.StringValue("no-more-attempts")},
-	))
+	l2.monitorProbesFailedCount++
+}
+
+func (l2 *L2) checkAndResetProbeTxNonce(ctx context.Context) {
+	l := logutils.LoggerFromContext(ctx)
+
+	inFlight := l2.monitorProbesSentCount - l2.monitorProbesLandedCount
+	if inFlight > l2.cfg.Monitor.ResetThreshold {
+		l.Warn("In-flight probe transaction count is above threshold, resetting the nonce",
+			zap.Int64("count", inFlight),
+			zap.Int64("threshold", l2.monitorProbesLandedCount),
+		)
+
+		l2.monitorNonce = 0
+		l2.monitorProbesSentCount = 0
+		l2.monitorProbesLandedCount = 0
+	}
 }

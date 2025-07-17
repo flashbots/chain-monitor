@@ -19,9 +19,9 @@ var (
 
 	WalletBalance otelapi.Float64ObservableGauge
 
-	ProbesSentCount   otelapi.Int64Counter
-	ProbesFailedCount otelapi.Int64Counter
-	ProbesLandedCount otelapi.Int64Counter
+	ProbesSentCount   otelapi.Int64ObservableCounter
+	ProbesFailedCount otelapi.Int64ObservableCounter
+	ProbesLandedCount otelapi.Int64ObservableCounter
 	ProbesLatency     *Int64Candlestick
 
 	FailedTxPerBlock *Int64Candlestick
