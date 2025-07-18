@@ -18,10 +18,13 @@ type L2 struct {
 	Rpc         string        `yaml:"rpc"`
 	RpcFallback []string      `yaml:"rpc_fallback"`
 
-	BuilderAddress  string            `yaml:"builder_address"`
-	WalletAddresses map[string]string `yaml:"wallet_addresses"`
+	MonitorBuilderAddress                         string            `yaml:"monitor_builder_address"`
+	MonitorBuilderPolicyContract                  string            `yaml:"monitor_builder_policy_contract"`
+	MonitorBuilderPolicyContractFunctionSignature string            `yaml:"monitor_builder_policy_contract_function_signature"`
+	MonitorTxReceipts                             bool              `yaml:"monitor_tx_receipts"`
+	MonitorWalletAddresses                        map[string]string `yaml:"monitor_wallet_addresses"`
 
-	Monitor *Monitor `yaml:"monitor"`
+	ProbeTx *ProbeTx `yaml:"probe"`
 }
 
 const (
@@ -29,75 +32,105 @@ const (
 )
 
 var (
-	errL2InvalidBuilderAddress = errors.New("invalid l2 builder address")
-	errL2InvalidRpc            = errors.New("invalid l2 rpc url")
-	errL2InvalidRpcFallback    = errors.New("invalid l2 fallback rpc url")
-	errL2InvalidWalletAddress  = errors.New("invalid l2 wallet address")
-	errL2ReorgWindowTooLarge   = errors.New("l2 reorg window is too large")
+	errL2InvalidBuilderAddress       = errors.New("invalid l2 builder address")
+	errL2InvalidBuilderPolicyContact = errors.New("invalid l2 builder policy contract address")
+	errL2InvalidRpc                  = errors.New("invalid l2 rpc url")
+	errL2InvalidRpcFallback          = errors.New("invalid l2 fallback rpc url")
+	errL2InvalidWalletAddress        = errors.New("invalid l2 wallet address")
+	errL2ReorgWindowTooLarge         = errors.New("l2 reorg window is too large")
 )
 
 func (cfg *L2) Validate() error {
 	errs := make([]error, 0)
 
-	if _, err := url.Parse(cfg.Rpc); err != nil {
-		errs = append(errs, fmt.Errorf("%w: %s: %w",
-			errL2InvalidRpc,
-			cfg.Rpc,
-			err,
-		))
+	{ // reorg_window
+		if cfg.ReorgWindow > maxReorgWindow {
+			errs = append(errs, fmt.Errorf("%w (max %d): %d",
+				errL2ReorgWindowTooLarge,
+				maxReorgWindow,
+				cfg.ReorgWindow,
+			))
+		}
 	}
 
-	for _, rpc := range cfg.RpcFallback {
-		if _, err := url.Parse(rpc); err != nil {
+	{ // rpc
+		if _, err := url.Parse(cfg.Rpc); err != nil {
 			errs = append(errs, fmt.Errorf("%w: %s: %w",
-				errL2InvalidRpcFallback,
-				rpc,
+				errL2InvalidRpc,
+				cfg.Rpc,
 				err,
 			))
 		}
 	}
 
-	if cfg.BuilderAddress != "" {
-		_addr, err := ethcommon.ParseHexOrString(cfg.BuilderAddress)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%w: %s: %w",
-				errL2InvalidBuilderAddress,
-				cfg.BuilderAddress,
-				err,
-			))
-		}
-		if len(_addr) != 20 {
-			errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
-				errL2InvalidBuilderAddress,
-				cfg.BuilderAddress,
-				len(_addr),
-			))
+	{ // rpc_fallback
+		for _, rpc := range cfg.RpcFallback {
+			if _, err := url.Parse(rpc); err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidRpcFallback,
+					rpc,
+					err,
+				))
+			}
 		}
 	}
 
-	if cfg.ReorgWindow > maxReorgWindow {
-		errs = append(errs, fmt.Errorf("%w (max %d): %d",
-			errL2ReorgWindowTooLarge,
-			maxReorgWindow,
-			cfg.ReorgWindow,
-		))
+	{ // monitor_builder_address
+		if cfg.MonitorBuilderAddress != "" {
+			_addr, err := ethcommon.ParseHexOrString(cfg.MonitorBuilderAddress)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidBuilderAddress,
+					cfg.MonitorBuilderAddress,
+					err,
+				))
+			}
+			if len(_addr) != 20 {
+				errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+					errL2InvalidBuilderAddress,
+					cfg.MonitorBuilderAddress,
+					len(_addr),
+				))
+			}
+		}
 	}
 
-	for _, wa := range cfg.WalletAddresses {
-		_addr, err := ethcommon.ParseHexOrString(wa)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%w: %s: %w",
-				errL2InvalidWalletAddress,
-				wa,
-				err,
-			))
+	{ // monitor_builder_policy_contract
+		if cfg.MonitorBuilderPolicyContract != "" {
+			_addr, err := ethcommon.ParseHexOrString(cfg.MonitorBuilderPolicyContract)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidBuilderPolicyContact,
+					cfg.MonitorBuilderPolicyContract,
+					err,
+				))
+			}
+			if len(_addr) != 20 {
+				errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+					errL2InvalidBuilderPolicyContact,
+					cfg.MonitorBuilderPolicyContract,
+					len(_addr),
+				))
+			}
 		}
-		if len(_addr) != 20 {
-			errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
-				errL2InvalidWalletAddress,
-				wa,
-				len(wa),
-			))
+	}
+	{ // monitor_wallet_address
+		for _, wa := range cfg.MonitorWalletAddresses {
+			_addr, err := ethcommon.ParseHexOrString(wa)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidWalletAddress,
+					wa,
+					err,
+				))
+			}
+			if len(_addr) != 20 {
+				errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+					errL2InvalidWalletAddress,
+					wa,
+					len(wa),
+				))
+			}
 		}
 	}
 

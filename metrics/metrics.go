@@ -20,7 +20,7 @@ var (
 
 func Setup(
 	ctx context.Context,
-	cfg *config.Monitor,
+	cfg *config.ProbeTx,
 	observe func(ctx context.Context, o otelapi.Observer) error,
 ) error {
 	for _, setup := range setups {
@@ -42,7 +42,7 @@ func Setup(
 	return nil
 }
 
-func setupMeter(ctx context.Context, _ *config.Monitor) error {
+func setupMeter(ctx context.Context, _ *config.ProbeTx) error {
 	res, err := resource.New(ctx)
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func setupMeter(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupBlockMissed(ctx context.Context, _ *config.Monitor) error {
+func setupBlockMissed(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("block_missed",
 		otelapi.WithDescription("height of the most recent missed block"),
 	)
@@ -77,7 +77,7 @@ func setupBlockMissed(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupBlocksLandedCount(ctx context.Context, _ *config.Monitor) error {
+func setupBlocksLandedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("blocks_landed_count",
 		otelapi.WithDescription("blocks landed by our builder"),
 	)
@@ -88,7 +88,7 @@ func setupBlocksLandedCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupBlocksMissedCount(ctx context.Context, _ *config.Monitor) error {
+func setupBlocksMissedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("blocks_missed_count",
 		otelapi.WithDescription("blocks missed by our builder"),
 	)
@@ -99,7 +99,7 @@ func setupBlocksMissedCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupBlocksSeenCount(ctx context.Context, _ *config.Monitor) error {
+func setupBlocksSeenCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("blocks_seen_count",
 		otelapi.WithDescription("blocks seen by the monitor"),
 	)
@@ -110,7 +110,7 @@ func setupBlocksSeenCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupReorgsCount(ctx context.Context, _ *config.Monitor) error {
+func setupReorgsCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Counter("reorgs_count",
 		otelapi.WithDescription("chain reorgs count"),
 	)
@@ -121,7 +121,7 @@ func setupReorgsCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupReorgDepth(ctx context.Context, _ *config.Monitor) error {
+func setupReorgDepth(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("reorg_depth",
 		otelapi.WithDescription("depth of the most recent reorg"),
 	)
@@ -132,7 +132,7 @@ func setupReorgDepth(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupWalletBalance(ctx context.Context, _ *config.Monitor) error {
+func setupWalletBalance(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Float64ObservableGauge("wallet_balance",
 		otelapi.WithDescription("wallet balance"),
 	)
@@ -143,7 +143,7 @@ func setupWalletBalance(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesSentCount(ctx context.Context, _ *config.Monitor) error {
+func setupProbesSentCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64ObservableCounter("probes_sent_count",
 		otelapi.WithDescription("count of sent probe transactions"),
 	)
@@ -154,7 +154,7 @@ func setupProbesSentCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesFailedCount(ctx context.Context, _ *config.Monitor) error {
+func setupProbesFailedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64ObservableCounter("probes_failed_count",
 		otelapi.WithDescription("count of probe transactions we failed to send"),
 	)
@@ -165,7 +165,7 @@ func setupProbesFailedCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesLandedCount(ctx context.Context, _ *config.Monitor) error {
+func setupProbesLandedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64ObservableCounter("probes_landed_count",
 		otelapi.WithDescription("count of landed probe transactions"),
 	)
@@ -176,7 +176,7 @@ func setupProbesLandedCount(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
+func setupProbesLatency(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("probes_latency_ohlc", "latency of landed probe transactions", "s")
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func setupProbesLatency(ctx context.Context, _ *config.Monitor) error {
 	return nil
 }
 
-func setupFailedTxPerBlock(ctx context.Context, cfg *config.Monitor) error {
+func setupFailedTxPerBlock(ctx context.Context, cfg *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("failed_tx_per_block_ohlc", "failed transactions per block", "")
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func setupFailedTxPerBlock(ctx context.Context, cfg *config.Monitor) error {
 	return nil
 }
 
-func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
+func setupGasPerBlock(ctx context.Context, cfg *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("gas_per_block_ohlc", "gas per block", "")
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func setupGasPerBlock(ctx context.Context, cfg *config.Monitor) error {
 	return nil
 }
 
-func setupGasPerTx(ctx context.Context, cfg *config.Monitor) error {
+func setupGasPerTx(ctx context.Context, cfg *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("gas_per_tx_ohlc", "gas per transaction", "")
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func setupGasPerTx(ctx context.Context, cfg *config.Monitor) error {
 	return nil
 }
 
-func setupGasPricePerTx(ctx context.Context, cfg *config.Monitor) error {
+func setupGasPricePerTx(ctx context.Context, cfg *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("gas_price_per_tx_ohlc", "gas per transaction", "")
 	if err != nil {
 		return err
@@ -237,7 +237,7 @@ func setupGasPricePerTx(ctx context.Context, cfg *config.Monitor) error {
 	return nil
 }
 
-func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
+func setupTxPerBlock(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("tx_per_block_ohlc", "count of transactions in a block", "")
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func setupTxPerBlock(ctx context.Context, _ *config.Monitor) error {
 
 // TODO: get rid of below
 
-func setupGasPrice(ctx context.Context, cfg *config.Monitor) error {
+func setupGasPrice(ctx context.Context, cfg *config.ProbeTx) error {
 	m, err := NewInt64Candlestick("gas_price_ohlc", "gas price", "")
 	if err != nil {
 		return err

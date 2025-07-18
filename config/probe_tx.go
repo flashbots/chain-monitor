@@ -9,27 +9,22 @@ import (
 	"github.com/flashbots/chain-monitor/utils"
 )
 
-type Monitor struct {
+type ProbeTx struct {
 	PrivateKey string `yaml:"private_key"`
-
-	MaxGasPerBlock uint64 `yaml:"max_gas_per_block"`
-	MaxGasPrice    uint64 `yaml:"max_gas_price"`
 
 	ResetInterval  time.Duration `yaml:"reset_interval"`
 	ResetThreshold int64         `yaml:"reset_threshold"`
 
-	TxGasLimit           uint64 `yaml:"tx_gas_limit"`
-	TxGasPriceAdjustment int64  `yaml:"tx_gas_price_adjustment"`
-	TxGasPriceCap        int64  `yaml:"tx_gas_price_cap"`
-
-	TxReceipts bool `yaml:"tx_receipts"`
+	GasLimit           uint64 `yaml:"gas_limit"`
+	GasPriceAdjustment int64  `yaml:"gas_price_adjustment"`
+	GasPriceCap        int64  `yaml:"tx_gas_price_cap"`
 }
 
 var (
 	errL2InvalidMonitorPrivateKey = errors.New("invalid monitor's private key")
 )
 
-func (cfg *Monitor) Validate() error {
+func (cfg *ProbeTx) Validate() error {
 	errs := make([]error, 0)
 
 	if cfg.PrivateKey != "" {

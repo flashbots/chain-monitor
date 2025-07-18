@@ -35,7 +35,7 @@ var (
 )
 
 var (
-	setups = []func(context.Context, *config.Monitor) error{
+	setups = []func(context.Context, *config.ProbeTx) error{
 		setupMeter, // must come first
 
 		setupBlockMissed,

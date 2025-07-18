@@ -37,13 +37,15 @@ type L2 struct {
 	rpc    *rpc.RPC
 	ticker *time.Ticker
 
-	builderAddr ethcommon.Address
-	chainID     *big.Int
-	monitorAddr ethcommon.Address
-	monitorKey  *ecdsa.PrivateKey
-	reorgWindow int
-	signer      ethtypes.EIP155Signer
-	wallets     map[string]ethcommon.Address
+	builderAddr            ethcommon.Address
+	builderPolicyAddr      ethcommon.Address
+	builderPolicySignature [4]byte
+	chainID                *big.Int
+	monitorAddr            ethcommon.Address
+	monitorKey             *ecdsa.PrivateKey
+	reorgWindow            int
+	signer                 ethtypes.EIP155Signer
+	wallets                map[string]ethcommon.Address
 
 	blockHeight uint64
 	blocks      *types.RingBuffer[blockRecord]
@@ -71,7 +73,7 @@ func newL2(cfg *config.L2) (*L2, error) {
 	l2 := &L2{
 		cfg:         cfg,
 		reorgWindow: int(cfg.ReorgWindow/cfg.BlockTime) + 1,
-		wallets:     make(map[string]ethcommon.Address, len(cfg.WalletAddresses)),
+		wallets:     make(map[string]ethcommon.Address, len(cfg.MonitorWalletAddresses)),
 	}
 
 	{ // ticker
@@ -80,8 +82,8 @@ func newL2(cfg *config.L2) (*L2, error) {
 		l2.ticker = time.NewTicker(cfg.BlockTime)
 	}
 
-	if cfg.BuilderAddress != "" { // builderAddr
-		addr, err := ethcommon.ParseHexOrString(cfg.BuilderAddress)
+	if cfg.MonitorBuilderAddress != "" { // builderAddr
+		addr, err := ethcommon.ParseHexOrString(cfg.MonitorBuilderAddress)
 		if err != nil {
 			return nil, err
 		}
@@ -94,18 +96,37 @@ func newL2(cfg *config.L2) (*L2, error) {
 		copy(l2.builderAddr[:], addr)
 	}
 
-	if cfg.Monitor.PrivateKey != "" { // monitorAddr, monitorKey
-		monitorKey, err := crypto.HexToECDSA(cfg.Monitor.PrivateKey)
+	if cfg.MonitorBuilderPolicyContract != "" {
+		addr, err := ethcommon.ParseHexOrString(cfg.MonitorBuilderPolicyContract)
+		if err != nil {
+			return nil, err
+		}
+		if len(addr) != 20 {
+			return nil, fmt.Errorf(
+				"invalid length for the builder policy contract address (want 20, got %d)",
+				len(addr),
+			)
+		}
+		copy(l2.builderPolicyAddr[:], addr)
+	}
+
+	if cfg.MonitorBuilderPolicyContractFunctionSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyContractFunctionSignature))
+		copy(l2.builderPolicySignature[:], h[:4])
+	}
+
+	if cfg.ProbeTx.PrivateKey != "" { // monitorAddr, monitorKey
+		monitorKey, err := crypto.HexToECDSA(cfg.ProbeTx.PrivateKey)
 		if err != nil {
 			return nil, err
 		}
 		l2.monitorKey = monitorKey
 		l2.monitorAddr = crypto.PubkeyToAddress(monitorKey.PublicKey)
 
-		l2.monitorResetTicker = time.NewTicker(cfg.Monitor.ResetInterval)
+		l2.monitorResetTicker = time.NewTicker(cfg.ProbeTx.ResetInterval)
 	}
 
-	for name, addrStr := range cfg.WalletAddresses { // wallets
+	for name, addrStr := range cfg.MonitorWalletAddresses { // wallets
 		var addr ethcommon.Address
 		addrBytes, err := ethcommon.ParseHexOrString(addrStr)
 		if err != nil {
@@ -370,7 +391,11 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	var builderTxCount, failedTxCount int64
 	for _, tx := range block.Transactions() {
-		if l2.isBuilderTx(ctx, block, tx, expectedBuilderTxData) {
+		if l2.cfg.MonitorBuilderAddress != "" && l2.isBuilderTx(ctx, block, tx, expectedBuilderTxData) {
+			builderTxCount++
+		}
+
+		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyTx(tx) {
 			builderTxCount++
 		}
 
@@ -391,7 +416,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			metrics.GasPricePerTx.Record(ctx, gasPrice)
 		}
 
-		if l2.cfg.Monitor.TxReceipts {
+		if l2.cfg.MonitorTxReceipts {
 			if receipt, err := l2.rpc.TransactionReceipt(ctx, tx.Hash()); err == nil {
 				if receipt != nil {
 					metrics.GasPerTx.Record(ctx, int64(receipt.GasUsed))
@@ -527,6 +552,26 @@ func (l2 *L2) isBuilderTx(
 	return from.Cmp(l2.builderAddr) == 0
 }
 
+func (l2 *L2) isBuilderPolicyTx(
+	tx *ethtypes.Transaction,
+) bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	if tx.To().Cmp(l2.builderPolicyAddr) != 0 {
+		return false
+	}
+
+	if len(tx.Data()) < len(l2.builderPolicySignature) {
+		return false
+	}
+
+	signature := tx.Data()[:4]
+
+	return slices.Compare(signature, l2.builderPolicySignature[:]) == 0
+}
+
 func (l2 *L2) isProbeTx(
 	ctx context.Context,
 	block *ethtypes.Block,
@@ -605,7 +650,7 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 }
 
 func (l2 *L2) observerProbes(ctx context.Context, o otelapi.Observer) error {
-	if l2.cfg.Monitor.PrivateKey == "" {
+	if l2.cfg.ProbeTx.PrivateKey == "" {
 		return nil
 	}
 
@@ -637,10 +682,10 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 			return
 		}
 
-		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.Monitor.TxGasPriceAdjustment))
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(100+l2.cfg.ProbeTx.GasPriceAdjustment))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
 
-		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.Monitor.TxGasPriceCap))
+		gasPrice = utils.MinBigInt(gasPrice, big.NewInt(l2.cfg.ProbeTx.GasPriceCap))
 	}
 
 	if l2.monitorNonce == 0 { // get the nonce
@@ -667,7 +712,7 @@ tryingNonces:
 			l2.monitorNonce,
 			ethcommon.Address{},
 			nil,
-			l2.cfg.Monitor.TxGasLimit,
+			l2.cfg.ProbeTx.GasLimit,
 			gasPrice,
 			data,
 		)
@@ -752,7 +797,7 @@ func (l2 *L2) checkAndResetProbeTxNonce(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
 	inFlight := l2.monitorProbesSentCount - l2.monitorProbesLandedCount
-	if inFlight > l2.cfg.Monitor.ResetThreshold {
+	if inFlight > l2.cfg.ProbeTx.ResetThreshold {
 		l.Warn("In-flight probe transaction count is above threshold, resetting the nonce",
 			zap.Int64("count", inFlight),
 			zap.Int64("threshold", l2.monitorProbesLandedCount),

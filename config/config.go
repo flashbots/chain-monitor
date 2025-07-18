@@ -25,7 +25,7 @@ func New() *Config {
 
 		L2: &L2{
 			Dir:     dir,
-			Monitor: &Monitor{},
+			ProbeTx: &ProbeTx{},
 		},
 	}
 }

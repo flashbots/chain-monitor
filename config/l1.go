@@ -10,9 +10,9 @@ import (
 )
 
 type L1 struct {
-	Rpc             string            `yaml:"rpc"`
-	RpcFallback     []string          `yaml:"rpc_fallback"`
-	WalletAddresses map[string]string `yaml:"wallet_addresses"`
+	Rpc                    string            `yaml:"rpc"`
+	RpcFallback            []string          `yaml:"rpc_fallback"`
+	MonitorWalletAddresses map[string]string `yaml:"monitor_wallet_addresses"`
 }
 
 var (
@@ -42,7 +42,7 @@ func (cfg *L1) Validate() error {
 		}
 	}
 
-	for _, wa := range cfg.WalletAddresses {
+	for _, wa := range cfg.MonitorWalletAddresses {
 		_addr, err := ethcommon.ParseHexOrString(wa)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%w: %s: %w",

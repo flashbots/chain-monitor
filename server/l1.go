@@ -23,10 +23,10 @@ type L1 struct {
 
 func newL1(cfg *config.L1) (*L1, error) {
 	var (
-		wallets = make(map[string]ethcommon.Address, len(cfg.WalletAddresses))
+		wallets = make(map[string]ethcommon.Address, len(cfg.MonitorWalletAddresses))
 	)
 
-	for name, addrStr := range cfg.WalletAddresses {
+	for name, addrStr := range cfg.MonitorWalletAddresses {
 		var addr ethcommon.Address
 		addrBytes, err := ethcommon.ParseHexOrString(addrStr)
 		if err != nil {

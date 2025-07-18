@@ -37,6 +37,14 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	}
 
 	l1Flags := []cli.Flag{
+		&cli.StringSliceFlag{ // --l1-monitor-wallet
+			Category:    strings.ToUpper(categoryL1),
+			Destination: l1WalletAddresses,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_MONITOR_WALLET"},
+			Name:        categoryL1 + "-monitor-wallet",
+			Usage:       "list of l1 wallet `label=address` to monitor the balances of",
+		},
+
 		&cli.StringFlag{ // --l1-rpc
 			Category:    strings.ToUpper(categoryL1),
 			Destination: &cfg.L1.Rpc,
@@ -46,20 +54,12 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "http://127.0.0.1:8545",
 		},
 
-		&cli.StringSliceFlag{ // --l1-monitor-wallets
+		&cli.StringSliceFlag{ // --l1-rpc-fallback
 			Category:    strings.ToUpper(categoryL1),
 			Destination: l1RpcFallback,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_RPC_FALLBACK"},
 			Name:        categoryL1 + "-rpc-fallback",
-			Usage:       "`url` of fallback l1 rpc endpoint",
-		},
-
-		&cli.StringSliceFlag{ // --l1-monitor-wallets
-			Category:    strings.ToUpper(categoryL1),
-			Destination: l1WalletAddresses,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_MONITOR_WALLETS"},
-			Name:        categoryL1 + "-monitor-wallets",
-			Usage:       "`list` of l1 wallet addresses to monitor the balances of",
+			Usage:       "`url`s of fallback l1 rpc endpoints",
 		},
 	}
 
@@ -73,92 +73,99 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       2 * time.Second,
 		},
 
-		&cli.StringFlag{ // --l2-builder-address
+		&cli.StringFlag{ // --l2-monitor-builder-address
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.BuilderAddress,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BUILDER_ADDRESS"},
-			Name:        categoryL2 + "-builder-address",
-			Usage:       "l2 builder `address`",
+			Destination: &cfg.L2.MonitorBuilderAddress,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_ADDRESS"},
+			Name:        categoryL2 + "-monitor-builder-address",
+			Usage:       "l2 builder `address` to monitor",
 		},
 
-		&cli.Uint64Flag{ // --l2-monitor-max-gas-per-block
+		&cli.StringFlag{ // --l2-monitor-builder-policy-contract
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.MaxGasPerBlock,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_MAX_GAS_PER_BLOCK"},
-			Name:        categoryL2 + "-monitor-max-gas-per-block",
-			Usage:       "l2's max gas per block limit in `wei` (for histogram metrics)",
-			Value:       30000000,
+			Destination: &cfg.L2.MonitorBuilderPolicyContract,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_POLICY_CONTRACT"},
+			Name:        categoryL2 + "-monitor-builder-policy-contract",
+			Usage:       "l2 builder flashtestations policy contract `address` to monitor",
 		},
 
-		&cli.Uint64Flag{ // --l2-monitor-max-gas-price
+		&cli.StringFlag{ // --l2-monitor-builder-policy-contract-function-signature
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.MaxGasPrice,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_MAX_GAS_PRICE"},
-			Name:        categoryL2 + "-monitor-max-gas-price",
-			Usage:       "l2's max gas price limit in `wei` (for histogram metrics)",
-			Value:       1000000000,
-		},
-
-		&cli.StringFlag{ // --l2-monitor-private-key
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.PrivateKey,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_PRIVATE_KEY"},
-			Name:        categoryL2 + "-monitor-private-key",
-			Usage:       "l2 private `key` to send tx inclusion latency probes with",
-		},
-
-		&cli.DurationFlag{ // --l2-monitor-reset-interval
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.ResetInterval,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_RESET_INTERVAL"},
-			Name:        categoryL2 + "-monitor-reset-interval",
-			Usage:       "`interval` at which to conditionally reset l2 monitor nonce",
-			Value:       10 * time.Minute,
-		},
-
-		&cli.Int64Flag{
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.ResetThreshold,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_RESET_THRESHOLD"},
-			Name:        categoryL2 + "-monitor-reset-threshold",
-			Usage:       "a `difference` probeTxSent - probeTxLanded that should trigger monitor tx nonce reset",
-			Value:       60,
-		},
-
-		&cli.Uint64Flag{ // --l2-monitor-tx-gas-limit
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.TxGasLimit,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_LIMIT"},
-			Name:        categoryL2 + "-monitor-tx-gas-limit",
-			Usage:       "l2 monitor transactions gas `limit`",
-			Value:       1000000,
-		},
-
-		&cli.Int64Flag{ // --l2-monitor-tx-gas-price-adjustment
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.TxGasPriceAdjustment,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_ADJUSTMENT"},
-			Name:        categoryL2 + "-monitor-tx-gas-price-adjustment",
-			Usage:       "l2 monitor transactions gas price adjustment in `%`",
-			Value:       10,
+			Destination: &cfg.L2.MonitorBuilderPolicyContractFunctionSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_POLICY_CONTRACT_FUNCTION_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-builder-policy-contract-function-signature",
+			Usage:       "l2 builder flashtestations policy contract function `signature` to monitor",
+			Value:       "verifyBlockBuilderProof(uint8,bytes32)",
 		},
 
 		&cli.BoolFlag{ // --l2-monitor-tx-receipts
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.TxReceipts,
+			Destination: &cfg.L2.MonitorTxReceipts,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_RECEIPTS"},
 			Name:        categoryL2 + "-monitor-tx-receipts",
 			Usage:       "l2 monitor transactions receipts (can be slow on busy chains)",
 			Value:       false,
 		},
 
-		&cli.Int64Flag{ // --l2-monitor-tx-gas-price-cap
+		&cli.StringSliceFlag{ // --l2-monitor-wallet
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.Monitor.TxGasPriceCap,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_TX_GAS_PRICE_CAP"},
-			Name:        categoryL2 + "-monitor-tx-gas-price-cap",
-			Usage:       "l2 monitor transactions gas price cap in `wei`",
+			Destination: l2WalletAddresses,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_WALLET"},
+			Name:        categoryL2 + "-monitor-wallet",
+			Usage:       "list of l2 wallet `label=address` to monitor the balances of",
+		},
+
+		&cli.Uint64Flag{ // --l2-probe-tx-gas-limit
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.GasLimit,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_GAS_LIMIT"},
+			Name:        categoryL2 + "-probe-tx-gas-limit",
+			Usage:       "l2 probe transaction gas `limit`",
+			Value:       1000000,
+		},
+
+		&cli.Int64Flag{ // --l2-probe-tx-gas-price-adjustment
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.GasPriceAdjustment,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_GAS_PRICE_ADJUSTMENT"},
+			Name:        categoryL2 + "-probe-tx-gas-price-adjustment",
+			Usage:       "l2 probe transaction gas price adjustment in `percent`",
 			Value:       10,
+		},
+
+		&cli.Int64Flag{ // --l2-probe-tx-gas-price-cap
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.GasPriceCap,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_GAS_PRICE_CAP"},
+			Name:        categoryL2 + "-probe-tx-gas-price-cap",
+			Usage:       "l2 probe transaction gas price cap in `wei`",
+			Value:       10,
+		},
+
+		&cli.DurationFlag{ // --l2-probe-tx-nonce-reset-interval
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.ResetInterval,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_NONCE_RESET_INTERVAL"},
+			Name:        categoryL2 + "-probe-tx-nonce-reset-interval",
+			Usage:       "`interval` at which to conditionally reset l2 probe tx nonce",
+			Value:       10 * time.Minute,
+		},
+
+		&cli.Int64Flag{ // --l2-probe-tx-nonce-reset-threshold
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.ResetThreshold,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "PROBE_TX_RESET_THRESHOLD"},
+			Name:        categoryL2 + "-probe-tx-nonce-reset-threshold",
+			Usage:       "`difference` probeTxSent-probeTxLanded that should trigger probe tx nonce reset",
+			Value:       60,
+		},
+
+		&cli.StringFlag{ // --l2-probe-tx-private-key
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.PrivateKey,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_PRIVATE_KEY"},
+			Name:        categoryL2 + "-probe-tx-private-key",
+			Usage:       "l2 private `key` to send tx inclusion latency probes with",
 		},
 
 		&cli.DurationFlag{ // --l2-reorg-window
@@ -184,15 +191,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Destination: l2RpcFallback,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_RPC_FALLBACK"},
 			Name:        categoryL2 + "-rpc-fallback",
-			Usage:       "`url` of fallback l2 rpc endpoint",
-		},
-
-		&cli.StringSliceFlag{ // --l2-monitor-wallets
-			Category:    strings.ToUpper(categoryL2),
-			Destination: l2WalletAddresses,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_WALLETS"},
-			Name:        categoryL2 + "-monitor-wallets",
-			Usage:       "`list` of l2 wallet addresses to monitor the balances of",
+			Usage:       "`url`s of fallback l2 rpc endpoints",
 		},
 	}
 
@@ -242,7 +241,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 					addr := strings.TrimSpace(parts[1])
 					_walletAddresses[name] = addr
 				}
-				cfg.L1.WalletAddresses = _walletAddresses
+				cfg.L1.MonitorWalletAddresses = _walletAddresses
 			}
 
 			{
@@ -258,7 +257,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 					addr := strings.TrimSpace(parts[1])
 					_walletAddresses[name] = addr
 				}
-				cfg.L2.WalletAddresses = _walletAddresses
+				cfg.L2.MonitorWalletAddresses = _walletAddresses
 			}
 
 			return cfg.Validate()
