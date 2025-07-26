@@ -385,13 +385,25 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		}
 
 		if l2.unwinding {
-			depth := l2.unwindBlockHeight - blockNumber
+			var depth int64
+			if l2.unwindBlockHeight > blockNumber {
+				depth = int64(l2.unwindBlockHeight - blockNumber)
+			} else {
+				depth = int64(blockNumber - l2.unwindBlockHeight)
+			}
 
-			metrics.ReorgsCount.Add(ctx, 1)
-			metrics.ReorgDepth.Record(ctx, int64(depth))
+			metrics.ReorgsCount.Add(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+				attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+			))
+
+			metrics.ReorgDepth.Record(ctx, depth, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+				attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+			))
 
 			l.Info("Finished the unwind",
-				zap.Uint64("reorg_depth", depth),
+				zap.Int64("reorg_depth", depth),
 				zap.Uint64("old_block_number", l2.unwindBlockHeight),
 			)
 
@@ -401,7 +413,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	}
 
 	l2.blocksSeen++
-	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
+	metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+	))
 
 	expectedBuilderTxData := []byte(fmt.Sprintf("Block Number: %s", block.Number().String()))
 
@@ -457,8 +472,17 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			Landed: false,
 		})
 		l2.blocksMissed++
-		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
-		metrics.BlockMissed.Record(ctx, int64(blockNumber))
+
+		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		metrics.BlockMissed.Record(ctx, int64(blockNumber), otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
 		l.Warn("Builder had missed a block",
 			zap.Int64("blocks_landed", l2.blocksLanded),
 			zap.Int64("blocks_missed", l2.blocksMissed),
@@ -478,7 +502,11 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			Landed: true,
 		})
 		l2.blocksLanded++
-		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
+
+		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
 	}
 
 	metrics.FailedTxPerBlock.Record(ctx, failedTxCount)
@@ -494,9 +522,20 @@ func (l2 *L2) processReorgUnwind(ctx context.Context) error {
 	l := logutils.LoggerFromContext(ctx)
 
 	defer func() {
-		metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen)
-		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded)
-		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
+		metrics.BlocksSeenCount.Record(ctx, l2.blocksSeen, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		metrics.BlocksLandedCount.Record(ctx, l2.blocksLanded, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
 	}()
 
 	for br, ok := l2.blocks.Pick(); ok; {
@@ -634,6 +673,15 @@ func (l2 *L2) isProbeTx(
 	return true, txEpoch, latency
 }
 
+func (l2 *L2) observeBlockHeight(ctx context.Context, o otelapi.Observer) error {
+	o.ObserveInt64(metrics.BlockHeight, int64(l2.blockHeight), otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+	))
+
+	return nil
+}
+
 func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	l := logutils.LoggerFromContext(ctx)
 
@@ -655,6 +703,8 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		balance, _ := _balance.Float64()
 
 		o.ObserveFloat64(metrics.WalletBalance, balance, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
 			attribute.KeyValue{Key: "wallet_address", Value: attribute.StringValue(addr.String())},
 			attribute.KeyValue{Key: "wallet_name", Value: attribute.StringValue(name)},
 		))
@@ -668,9 +718,20 @@ func (l2 *L2) observerProbes(_ context.Context, o otelapi.Observer) error {
 		return nil
 	}
 
-	o.ObserveInt64(metrics.ProbesFailedCount, l2.monitorProbesFailedCount)
-	o.ObserveInt64(metrics.ProbesLandedCount, l2.monitorProbesLandedCount)
-	o.ObserveInt64(metrics.ProbesSentCount, l2.monitorProbesSentCount)
+	o.ObserveInt64(metrics.ProbesFailedCount, l2.monitorProbesFailedCount, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+	))
+
+	o.ObserveInt64(metrics.ProbesLandedCount, l2.monitorProbesLandedCount, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+	))
+
+	o.ObserveInt64(metrics.ProbesSentCount, l2.monitorProbesSentCount, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+	))
 
 	return nil
 }

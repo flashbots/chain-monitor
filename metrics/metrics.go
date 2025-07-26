@@ -30,6 +30,7 @@ func Setup(
 	}
 
 	_, err := meter.RegisterCallback(observe,
+		BlockHeight,
 		ProbesSentCount,
 		ProbesFailedCount,
 		ProbesLandedCount,
@@ -63,6 +64,17 @@ func setupMeter(ctx context.Context, _ *config.ProbeTx) error {
 
 	meter = provider.Meter(metricsNamespace)
 
+	return nil
+}
+
+func setupBlockHeight(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64ObservableGauge("block_height",
+		otelapi.WithDescription("block height as reported by rpc"),
+	)
+	if err != nil {
+		return err
+	}
+	BlockHeight = m
 	return nil
 }
 

@@ -164,6 +164,7 @@ func (s *Server) Run() error {
 func (s *Server) observe(ctx context.Context, o otelapi.Observer) error {
 	return errors.Join(
 		s.l1.observeWallets(ctx, o),
+		s.l2.observeBlockHeight(ctx, o),
 		s.l2.observeWallets(ctx, o),
 		s.l2.observerProbes(ctx, o),
 	)

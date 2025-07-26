@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	BlockHeight otelapi.Int64ObservableGauge
 	BlockMissed otelapi.Int64Gauge
 
 	BlocksLandedCount otelapi.Int64Gauge
@@ -38,6 +39,7 @@ var (
 	setups = []func(context.Context, *config.ProbeTx) error{
 		setupMeter, // must come first
 
+		setupBlockHeight,
 		setupBlockMissed,
 
 		setupBlocksLandedCount,

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/chain-monitor/config"
@@ -16,15 +17,21 @@ import (
 )
 
 type L1 struct {
-	cfg     *config.L1
-	rpc     *rpc.RPC
+	cfg *config.L1
+
+	rpc *rpc.RPC
+
+	chainID *big.Int
 	wallets map[string]ethcommon.Address
 }
 
 func newL1(cfg *config.L1) (*L1, error) {
-	var (
-		wallets = make(map[string]ethcommon.Address, len(cfg.MonitorWalletAddresses))
-	)
+	l := zap.L()
+
+	l1 := &L1{
+		cfg:     cfg,
+		wallets: make(map[string]ethcommon.Address, len(cfg.MonitorWalletAddresses)),
+	}
 
 	for name, addrStr := range cfg.MonitorWalletAddresses {
 		var addr ethcommon.Address
@@ -39,19 +46,31 @@ func newL1(cfg *config.L1) (*L1, error) {
 			)
 		}
 		copy(addr[:], addrBytes)
-		wallets[name] = addr
+		l1.wallets[name] = addr
 	}
 
-	rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
-	if err != nil {
-		return nil, err
+	{ // rpc
+		rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
+		if err != nil {
+			return nil, err
+		}
+		l1.rpc = rpc
 	}
 
-	return &L1{
-		cfg:     cfg,
-		rpc:     rpc,
-		wallets: wallets,
-	}, nil
+	{ // chainID
+		chainID, err := l1.rpc.NetworkID(context.Background())
+		if err != nil {
+			l.Error("Failed to request network id",
+				zap.Error(err),
+				zap.String("kind", "l1"),
+			)
+			return nil, err
+		}
+
+		l1.chainID = chainID
+	}
+
+	return l1, nil
 }
 
 func (l1 *L1) run(_ context.Context) {
@@ -83,6 +102,8 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 		balance, _ := _balance.Float64()
 
 		o.ObserveFloat64(metrics.WalletBalance, balance, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l1")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l1.chainID.Int64())},
 			attribute.KeyValue{Key: "wallet_address", Value: attribute.StringValue(addr.String())},
 			attribute.KeyValue{Key: "wallet_name", Value: attribute.StringValue(name)},
 		))
