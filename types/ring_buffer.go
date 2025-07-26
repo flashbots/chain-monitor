@@ -109,7 +109,7 @@ func (b *RingBuffer[T]) Head() (T, bool) {
 	return b.buf[head], true
 }
 
-// Pick returns an element from the head of the buffer and returns its value
+// Pick removes an element from the head of the buffer and returns its value
 func (b *RingBuffer[T]) Pick() (T, bool) {
 	if b.head == b.tail {
 		var res T // nil value

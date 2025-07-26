@@ -65,9 +65,22 @@ func (rpc *RPC) Close() {
 }
 
 func (rpc *RPC) NetworkID(ctx context.Context) (*big.Int, error) {
-	return callMainThenFallbackWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
+	networkIDs, err := callEveryoneWithResult(ctx, rpc, func(ctx context.Context, rpc *ethclient.Client) (*big.Int, error) {
 		return rpc.NetworkID(ctx)
 	})
+	if len(networkIDs) == 0 {
+		return nil, err
+	}
+
+	networkID := networkIDs[0]
+	for _, _networkID := range networkIDs {
+		if networkID.Cmp(_networkID) != 0 {
+			return networkID, fmt.Errorf("mismatching network ids: %d vs. %d",
+				networkID.Uint64(), _networkID.Uint64(),
+			)
+		}
+	}
+	return networkID, nil
 }
 
 func (rpc *RPC) BlockNumber(ctx context.Context) (uint64, error) {

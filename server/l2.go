@@ -63,8 +63,8 @@ type L2 struct {
 	monitorProbesLandedCount int64
 	monitorProbesSentCount   int64
 
-	unwindingByHash    bool
-	unwindByHashHeight uint64
+	unwinding         bool
+	unwindBlockHeight uint64
 }
 
 func newL2(cfg *config.L2) (*L2, error) {
@@ -285,6 +285,22 @@ func (l2 *L2) stop() {
 func (l2 *L2) processNewBlocks(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
+	chainID, err := l2.rpc.NetworkID(context.Background())
+	if err != nil {
+		l.Warn("Failed to request chain id, skipping this round...",
+			zap.Error(err),
+			zap.String("kind", "l2"),
+			zap.String("rpc", l2.cfg.Rpc),
+		)
+		return
+	}
+	if chainID.Cmp(l2.chainID) != 0 {
+		l.Warn("Unexpected chain id, skipping this round...",
+			zap.Uint64("expected", l2.chainID.Uint64()),
+			zap.Uint64("got", chainID.Uint64()),
+		)
+	}
+
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
 	if err != nil {
 		l.Warn("Failed to request block number, skipping this round...",
@@ -353,34 +369,34 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	if blockNumber > 0 {
 		if previous, ok := l2.blocks.At(int(blockNumber) - 1); ok {
 			if previous.Hash.Cmp(block.ParentHash()) != 0 {
-				if !l2.unwindingByHash {
+				if !l2.unwinding {
 					l.Info("Chain reorg detected via hash mismatch, starting the unwind...",
 						zap.String("parent_hash", block.ParentHash().String()),
 						zap.String("old_parent_hash", previous.Hash.String()),
 					)
-					l2.unwindingByHash = true
-					l2.unwindByHashHeight = l2.blockHeight
-					return l2.processReorgByHash(ctx)
+					l2.unwinding = true
+					l2.unwindBlockHeight = blockNumber
+					return l2.processReorgUnwind(ctx)
 				}
 
-				l.Debug("Continuing the reorg unwind...")
-				return l2.processReorgByHash(ctx)
+				l.Debug("Continuing the unwind...")
+				return l2.processReorgUnwind(ctx)
 			}
 		}
 
-		if l2.unwindingByHash {
-			depth := l2.unwindByHashHeight - blockNumber
+		if l2.unwinding {
+			depth := l2.unwindBlockHeight - blockNumber
 
 			metrics.ReorgsCount.Add(ctx, 1)
 			metrics.ReorgDepth.Record(ctx, int64(depth))
 
 			l.Info("Finished the unwind",
 				zap.Uint64("reorg_depth", depth),
-				zap.Uint64("old_block_number", l2.unwindByHashHeight),
+				zap.Uint64("old_block_number", l2.unwindBlockHeight),
 			)
 
-			l2.unwindingByHash = false
-			l2.unwindByHashHeight = 0
+			l2.unwinding = false
+			l2.unwindBlockHeight = 0
 		}
 	}
 
@@ -474,7 +490,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	return nil
 }
 
-func (l2 *L2) processReorgByHash(ctx context.Context) error {
+func (l2 *L2) processReorgUnwind(ctx context.Context) error {
 	l := logutils.LoggerFromContext(ctx)
 
 	defer func() {
@@ -483,8 +499,9 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 		metrics.BlocksMissedCount.Record(ctx, l2.blocksMissed)
 	}()
 
-	for l2.blocks.Length() > 0 {
-		br, _ := l2.blocks.Pick()
+	for br, ok := l2.blocks.Pick(); ok; {
+		l2.blockHeight = br.Number.Uint64() - 1
+
 		l2.blocksSeen--
 		if br.Landed {
 			l2.blocksLanded--
@@ -508,7 +525,6 @@ func (l2 *L2) processReorgByHash(ctx context.Context) error {
 			)
 			return err
 		}
-		l2.blockHeight = br.Number.Uint64() - 1
 
 		if block.Hash().Cmp(br.Hash) == 0 {
 			return nil
@@ -555,11 +571,11 @@ func (l2 *L2) isBuilderTx(
 func (l2 *L2) isBuilderPolicyTx(
 	tx *ethtypes.Transaction,
 ) bool {
-	if tx.To() == nil {
+	if tx == nil || tx.Rejected() {
 		return false
 	}
 
-	if tx.To().Cmp(l2.builderPolicyAddr) != 0 {
+	if tx.To() == nil || tx.To().Cmp(l2.builderPolicyAddr) != 0 {
 		return false
 	}
 
@@ -567,9 +583,7 @@ func (l2 *L2) isBuilderPolicyTx(
 		return false
 	}
 
-	signature := tx.Data()[:4]
-
-	return slices.Compare(signature, l2.builderPolicySignature[:]) == 0
+	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0
 }
 
 func (l2 *L2) isProbeTx(
@@ -649,7 +663,7 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	return utils.FlattenErrors(errs)
 }
 
-func (l2 *L2) observerProbes(ctx context.Context, o otelapi.Observer) error {
+func (l2 *L2) observerProbes(_ context.Context, o otelapi.Observer) error {
 	if l2.cfg.ProbeTx.PrivateKey == "" {
 		return nil
 	}
