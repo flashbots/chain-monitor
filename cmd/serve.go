@@ -61,7 +61,6 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_RPC"},
 			Name:        categoryL1 + "-rpc",
 			Usage:       "`url` of l1 rpc endpoint",
-			Value:       "http://127.0.0.1:8545",
 		},
 
 		&cli.StringSliceFlag{ // --l1-rpc-fallback

@@ -35,23 +35,25 @@ type Server struct {
 }
 
 func New(cfg *config.Config) (*Server, error) {
-	l1, err := newL1(cfg.L1)
-	if err != nil {
-		return nil, err
+	s := &Server{
+		cfg:     cfg,
+		failure: make(chan error, 1),
+		logger:  zap.L(),
+	}
+
+	if cfg.L1.Rpc != "" {
+		l1, err := newL1(cfg.L1)
+		if err != nil {
+			return nil, err
+		}
+		s.l1 = l1
 	}
 
 	l2, err := newL2(cfg.L2)
 	if err != nil {
 		return nil, err
 	}
-
-	s := &Server{
-		cfg:     cfg,
-		failure: make(chan error, 1),
-		l1:      l1,
-		l2:      l2,
-		logger:  zap.L(),
-	}
+	s.l2 = l2
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleHealthcheck)
@@ -104,7 +106,9 @@ func (s *Server) Run() error {
 	}()
 
 	{ // run the monitors
-		s.l1.run(ctx)
+		if s.l1 != nil {
+			s.l1.run(ctx)
+		}
 		s.l2.run(ctx)
 	}
 
@@ -140,7 +144,9 @@ func (s *Server) Run() error {
 
 	{ // stop the monitors
 		s.l2.stop()
-		s.l1.stop()
+		if s.l1 != nil {
+			s.l1.stop()
+		}
 	}
 
 	{ // stop the server
@@ -154,8 +160,10 @@ func (s *Server) Run() error {
 	}
 
 	{ // close the rpc clients
-		s.l1.rpc.Close()
 		s.l2.rpc.Close()
+		if s.l1 != nil {
+			s.l1.rpc.Close()
+		}
 	}
 
 	return utils.FlattenErrors(errs)

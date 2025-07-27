@@ -276,9 +276,11 @@ func (rpc *RPC) SendTransaction(ctx context.Context, tx *ethtypes.Transaction) e
 	}
 	rawTx := hexutil.Encode(data)
 	return callMainThenFallback(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) error {
+		var txhash hexutil.Bytes
 		return rpc.callCheckingNetworkID(ctx, cli, ethrpc.BatchElem{
 			Method: "eth_sendRawTransaction",
 			Args:   []interface{}{rawTx},
+			Result: &txhash,
 		})
 	})
 }
