@@ -50,7 +50,7 @@ func newL1(cfg *config.L1) (*L1, error) {
 	}
 
 	{ // rpc
-		rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
+		rpc, err := rpc.New(cfg.NetworkID, cfg.Rpc, cfg.RpcFallback...)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +87,7 @@ func (l1 *L1) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
 	for name, addr := range l1.wallets {
-		_balance, err := l1.rpc.BalanceAt(ctx, addr, nil)
+		_balance, err := l1.rpc.BalanceAt(ctx, addr)
 		if err != nil {
 			l.Error("Failed to request balance",
 				zap.Error(err),

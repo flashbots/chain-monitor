@@ -143,7 +143,7 @@ func newL2(cfg *config.L2) (*L2, error) {
 	}
 
 	{ // rpc
-		rpc, err := rpc.New(cfg.Rpc, cfg.RpcFallback...)
+		rpc, err := rpc.New(cfg.NetworkID, cfg.Rpc, cfg.RpcFallback...)
 		if err != nil {
 			return nil, err
 		}
@@ -284,22 +284,6 @@ func (l2 *L2) stop() {
 
 func (l2 *L2) processNewBlocks(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
-
-	chainID, err := l2.rpc.NetworkID(context.Background())
-	if err != nil {
-		l.Warn("Failed to request chain id, skipping this round...",
-			zap.Error(err),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.Rpc),
-		)
-		return
-	}
-	if chainID.Cmp(l2.chainID) != 0 {
-		l.Warn("Unexpected chain id, skipping this round...",
-			zap.Uint64("expected", l2.chainID.Uint64()),
-			zap.Uint64("got", chainID.Uint64()),
-		)
-	}
 
 	blockHeight, err := l2.rpc.BlockNumber(ctx)
 	if err != nil {
@@ -538,7 +522,11 @@ func (l2 *L2) processReorgUnwind(ctx context.Context) error {
 		))
 	}()
 
-	for br, ok := l2.blocks.Pick(); ok; {
+	for {
+		br, ok := l2.blocks.Pick()
+		if !ok {
+			break
+		}
 		l2.blockHeight = br.Number.Uint64() - 1
 
 		l2.blocksSeen--
@@ -688,7 +676,7 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
 	for name, addr := range l2.wallets {
-		_balance, err := l2.rpc.BalanceAt(ctx, addr, nil)
+		_balance, err := l2.rpc.BalanceAt(ctx, addr)
 		if err != nil {
 			l.Warn("Failed to request balance",
 				zap.Error(err),
@@ -764,7 +752,7 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 	}
 
 	if l2.monitorNonce == 0 { // get the nonce
-		nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr, nil)
+		nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr)
 		if err != nil {
 			l.Warn("Failed to request a nonce",
 				zap.Error(err),
@@ -845,7 +833,7 @@ tryingNonces:
 			continue tryingNonces
 
 		case strings.Contains(err.Error(), "nonce too low"):
-			nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr, nil)
+			nonce, err := l2.rpc.NonceAt(ctx, l2.monitorAddr)
 			if err != nil {
 				l.Warn("Failed to request a nonce",
 					zap.Error(err),

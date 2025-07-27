@@ -45,6 +45,7 @@ OPTIONS:
    L1
 
    --l1-monitor-wallet label=address [ --l1-monitor-wallet label=address ]  list of l1 wallet label=address to monitor the balances of [$CHAIN_MONITOR_L1_MONITOR_WALLET]
+   --l1-network-id number                                                   on every rpc call, verify that network id matches this number (default: do not check) [$CHAIN_MONITOR_L1_NETWORK_ID]
    --l1-rpc url                                                             url of l1 rpc endpoint (default: "http://127.0.0.1:8545") [$CHAIN_MONITOR_L1_RPC]
    --l1-rpc-fallback url [ --l1-rpc-fallback url ]                          urls of fallback l1 rpc endpoints [$CHAIN_MONITOR_L1_RPC_FALLBACK]
 
@@ -56,6 +57,7 @@ OPTIONS:
    --l2-monitor-builder-policy-contract-function-signature signature        l2 builder flashtestations policy contract function signature to monitor (default: "verifyBlockBuilderProof(uint8,bytes32)") [$CHAIN_MONITOR_L2_MONITOR_BUILDER_POLICY_CONTRACT_FUNCTION_SIGNATURE]
    --l2-monitor-tx-receipts                                                 l2 monitor transactions receipts (can be slow on busy chains) (default: false) [$CHAIN_MONITOR_L2_MONITOR_TX_RECEIPTS]
    --l2-monitor-wallet label=address [ --l2-monitor-wallet label=address ]  list of l2 wallet label=address to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLET]
+   --l2-network-id number                                                   on every rpc call, verify that network id matches this number (default: do not check) [$CHAIN_MONITOR_L2_NETWORK_ID]
    --l2-probe-tx-gas-limit limit                                            l2 probe transaction gas limit (default: 1000000) [$CHAIN_MONITOR_L2_PROBE_TX_GAS_LIMIT]
    --l2-probe-tx-gas-price-adjustment percent                               l2 probe transaction gas price adjustment in percent (default: 10) [$CHAIN_MONITOR_L2_PROBE_TX_GAS_PRICE_ADJUSTMENT]
    --l2-probe-tx-gas-price-cap wei                                          l2 probe transaction gas price cap in wei (default: 10) [$CHAIN_MONITOR_L2_PROBE_TX_GAS_PRICE_CAP]

@@ -10,6 +10,7 @@ import (
 )
 
 type L1 struct {
+	NetworkID              uint64            `yaml:"network_id"`
 	Rpc                    string            `yaml:"rpc"`
 	RpcFallback            []string          `yaml:"rpc_fallback"`
 	MonitorWalletAddresses map[string]string `yaml:"monitor_wallet_addresses"`

@@ -45,6 +45,16 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Usage:       "list of l1 wallet `label=address` to monitor the balances of",
 		},
 
+		&cli.Uint64Flag{
+			Category:    strings.ToUpper(categoryL1),
+			Destination: &cfg.L1.NetworkID,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL1) + "_NETWORK_ID"},
+			Name:        categoryL1 + "-network-id",
+			Usage:       "on every rpc call, verify that network id matches this `number`",
+			Value:       0,
+			DefaultText: "do not check",
+		},
+
 		&cli.StringFlag{ // --l1-rpc
 			Category:    strings.ToUpper(categoryL1),
 			Destination: &cfg.L1.Rpc,
@@ -113,6 +123,16 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_WALLET"},
 			Name:        categoryL2 + "-monitor-wallet",
 			Usage:       "list of l2 wallet `label=address` to monitor the balances of",
+		},
+
+		&cli.Uint64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.NetworkID,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_NETWORK_ID"},
+			Name:        categoryL2 + "-network-id",
+			Usage:       "on every rpc call, verify that network id matches this `number`",
+			Value:       0,
+			DefaultText: "do not check",
 		},
 
 		&cli.Uint64Flag{ // --l2-probe-tx-gas-limit
