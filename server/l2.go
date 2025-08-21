@@ -727,6 +727,8 @@ func (l2 *L2) observerProbes(_ context.Context, o otelapi.Observer) error {
 func (l2 *L2) sendProbeTx(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
+	start := time.Now()
+
 	var (
 		data     = make([]byte, 8)
 		gasPrice *big.Int
@@ -768,6 +770,10 @@ func (l2 *L2) sendProbeTx(ctx context.Context) {
 
 tryingNonces:
 	for attempt := 1; attempt <= 8; attempt++ { // we don't want to get rate-limited
+		if attempt > 1 && time.Since(start) > 500*time.Millisecond {
+			return
+		}
+
 		thisBlock := time.Now().Add(-l2.cfg.BlockTime / 2).Round(l2.cfg.BlockTime)
 		binary.BigEndian.PutUint64(data, uint64(thisBlock.Unix()))
 
@@ -863,7 +869,7 @@ func (l2 *L2) checkAndResetProbeTxNonce(ctx context.Context) {
 	if inFlight > l2.cfg.ProbeTx.ResetThreshold {
 		l.Warn("In-flight probe transaction count is above threshold, resetting the nonce",
 			zap.Int64("count", inFlight),
-			zap.Int64("threshold", l2.monitorProbesLandedCount),
+			zap.Int64("threshold", l2.cfg.ProbeTx.ResetThreshold),
 		)
 
 		l2.monitorNonce = 0
