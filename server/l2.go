@@ -285,14 +285,21 @@ func (l2 *L2) stop() {
 func (l2 *L2) processNewBlocks(ctx context.Context) {
 	l := logutils.LoggerFromContext(ctx)
 
-	blockHeight, err := l2.rpc.BlockNumber(ctx)
-	if err != nil {
-		l.Warn("Failed to request block number, skipping this round...",
-			zap.Error(err),
-			zap.String("kind", "l2"),
-			zap.String("rpc", l2.cfg.Rpc),
-		)
-		return
+	var blockHeight uint64
+
+	if l2.cfg.GenesisTime == 0 {
+		if heightAccordingToRpc, err := l2.rpc.BlockNumber(ctx); err == nil {
+			blockHeight = heightAccordingToRpc
+		} else {
+			l.Warn("Failed to request block number, skipping this round...",
+				zap.Error(err),
+				zap.String("kind", "l2"),
+				zap.String("rpc", l2.cfg.Rpc),
+			)
+			return
+		}
+	} else {
+		blockHeight = (uint64(time.Now().Unix()) - l2.cfg.GenesisTime) / uint64(l2.cfg.BlockTime.Seconds())
 	}
 
 	if blockHeight == l2.blockHeight {

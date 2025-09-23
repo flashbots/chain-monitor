@@ -82,6 +82,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       2 * time.Second,
 		},
 
+		&cli.Uint64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.GenesisTime,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_GENESIS_TIME"},
+			Name:        categoryL2 + "-genesis-time",
+			Usage:       "genesis time of the chain (used to determine current height)",
+			Value:       0,
+		},
+
 		&cli.StringFlag{ // --l2-monitor-builder-address
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.MonitorBuilderAddress,

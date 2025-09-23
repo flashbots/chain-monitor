@@ -14,6 +14,7 @@ type L2 struct {
 	Dir *Dir `yaml:"-"`
 
 	BlockTime   time.Duration `yaml:"block_time"`
+	GenesisTime uint64        `yaml:"genesis_time"`
 	NetworkID   uint64        `yaml:"network_id"`
 	ReorgWindow time.Duration `yaml:"reorg_window"`
 	Rpc         string        `yaml:"rpc"`

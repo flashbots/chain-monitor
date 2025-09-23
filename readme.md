@@ -46,12 +46,13 @@ OPTIONS:
 
    --l1-monitor-wallet label=address [ --l1-monitor-wallet label=address ]  list of l1 wallet label=address to monitor the balances of [$CHAIN_MONITOR_L1_MONITOR_WALLET]
    --l1-network-id number                                                   on every rpc call, verify that network id matches this number (default: do not check) [$CHAIN_MONITOR_L1_NETWORK_ID]
-   --l1-rpc url                                                             url of l1 rpc endpoint (default: "http://127.0.0.1:8545") [$CHAIN_MONITOR_L1_RPC]
+   --l1-rpc url                                                             url of l1 rpc endpoint [$CHAIN_MONITOR_L1_RPC]
    --l1-rpc-fallback url [ --l1-rpc-fallback url ]                          urls of fallback l1 rpc endpoints [$CHAIN_MONITOR_L1_RPC_FALLBACK]
 
    L2
 
    --l2-block-time duration                                                 average duration between consecutive blocks on l2 (default: 2s) [$CHAIN_MONITOR_L2_BLOCK_TIME]
+   --l2-genesis-time value                                                  genesis time of the chain (used to determine current height) (default: 0) [$CHAIN_MONITOR_L2_GENESIS_TIME]
    --l2-monitor-builder-address address                                     l2 builder address to monitor [$CHAIN_MONITOR_L2_MONITOR_BUILDER_ADDRESS]
    --l2-monitor-builder-policy-contract address                             l2 builder flashtestations policy contract address to monitor [$CHAIN_MONITOR_L2_MONITOR_BUILDER_POLICY_CONTRACT]
    --l2-monitor-builder-policy-contract-function-signature signature        l2 builder flashtestations policy contract function signature to monitor (default: "verifyBlockBuilderProof(uint8,bytes32)") [$CHAIN_MONITOR_L2_MONITOR_BUILDER_POLICY_CONTRACT_FUNCTION_SIGNATURE]
