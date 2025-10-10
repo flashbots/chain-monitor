@@ -43,6 +43,7 @@ func (b *RingBuffer[T]) Length() int {
 	}
 }
 
+// Push puts an element at the head of the buffer
 func (b *RingBuffer[T]) Push(value T) {
 	switch {
 	case b.head >= b.tail:

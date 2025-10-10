@@ -15,6 +15,9 @@ var (
 	BlocksMissedCount otelapi.Int64Gauge
 	BlocksSeenCount   otelapi.Int64Gauge
 
+	FlashblocksLandedCount otelapi.Int64Gauge
+	FlashblocksMissedCount otelapi.Int64Gauge
+
 	ReorgsCount otelapi.Int64Counter
 	ReorgDepth  otelapi.Int64Gauge
 
@@ -45,6 +48,9 @@ var (
 		setupBlocksLandedCount,
 		setupBlocksMissedCount,
 		setupBlocksSeenCount,
+
+		setupFlashblocksLandedCount,
+		setupFlashblocksMissedCount,
 
 		setupReorgsCount,
 		setupReorgDepth,

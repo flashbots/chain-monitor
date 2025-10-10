@@ -82,6 +82,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       2 * time.Second,
 		},
 
+		&cli.Int64Flag{ // --l2-flashblocks-per-block
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.FlashblocksPerBlock,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_FLASHBLOCKS_PER_BLOCK"},
+			Name:        categoryL2 + "-flashblocks-per-block",
+			Usage:       "expected count of non-deposit flashblocks per block on l2",
+			Value:       4,
+		},
+
 		&cli.Uint64Flag{
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.GenesisTime,
@@ -114,6 +123,23 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Name:        categoryL2 + "-monitor-builder-policy-contract-function-signature",
 			Usage:       "l2 builder flashtestations policy contract function `signature` to monitor",
 			Value:       "verifyBlockBuilderProof(uint8,bytes32)",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashblockNumberContract,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCK_NUMBER_CONTRACT"},
+			Name:        categoryL2 + "-monitor-flashblock-number-contract",
+			Usage:       "l2 builder flashblock number contract `address` to monitor",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract-function-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashblockNumberContractFunctionSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCK_NUMBER_CONTRACT_FUNCTION_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-flashblock-number-contract-function-signature",
+			Usage:       "l2 builder flashblock number contract function `signature` to monitor",
+			Value:       "incrementFlashblockNumber()",
 		},
 
 		&cli.BoolFlag{ // --l2-monitor-tx-receipts

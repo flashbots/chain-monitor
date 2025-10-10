@@ -52,10 +52,13 @@ OPTIONS:
    L2
 
    --l2-block-time duration                                                 average duration between consecutive blocks on l2 (default: 2s) [$CHAIN_MONITOR_L2_BLOCK_TIME]
+   --l2-flashblocks-per-block value                                         expected count of non-deposit flashblocks per block on l2 (default: 4) [$CHAIN_MONITOR_L2_FLASHBLOCKS_PER_BLOCK]
    --l2-genesis-time value                                                  genesis time of the chain (used to determine current height) (default: 0) [$CHAIN_MONITOR_L2_GENESIS_TIME]
    --l2-monitor-builder-address address                                     l2 builder address to monitor [$CHAIN_MONITOR_L2_MONITOR_BUILDER_ADDRESS]
    --l2-monitor-builder-policy-contract address                             l2 builder flashtestations policy contract address to monitor [$CHAIN_MONITOR_L2_MONITOR_BUILDER_POLICY_CONTRACT]
    --l2-monitor-builder-policy-contract-function-signature signature        l2 builder flashtestations policy contract function signature to monitor (default: "verifyBlockBuilderProof(uint8,bytes32)") [$CHAIN_MONITOR_L2_MONITOR_BUILDER_POLICY_CONTRACT_FUNCTION_SIGNATURE]
+   --l2-monitor-flashblock-number-contract address                          l2 builder flashblock number contract address to monitor [$CHAIN_MONITOR_L2_MONITOR_FLASHBLOCK_NUMBER_CONTRACT]
+   --l2-monitor-flashblock-number-contract-function-signature signature     l2 builder flashblock number contract function signature to monitor (default: "incrementFlashblockNumber()") [$CHAIN_MONITOR_L2_MONITOR_FLASHBLOCK_NUMBER_CONTRACT_FUNCTION_SIGNATURE]
    --l2-monitor-tx-receipts                                                 l2 monitor transactions receipts (can be slow on busy chains) (default: false) [$CHAIN_MONITOR_L2_MONITOR_TX_RECEIPTS]
    --l2-monitor-wallet label=address [ --l2-monitor-wallet label=address ]  list of l2 wallet label=address to monitor the balances of [$CHAIN_MONITOR_L2_MONITOR_WALLET]
    --l2-network-id number                                                   on every rpc call, verify that network id matches this number (default: do not check) [$CHAIN_MONITOR_L2_NETWORK_ID]

@@ -37,15 +37,21 @@ type L2 struct {
 	rpc    *rpc.RPC
 	ticker *time.Ticker
 
-	builderAddr            ethcommon.Address
+	builderAddr ethcommon.Address
+
 	builderPolicyAddr      ethcommon.Address
 	builderPolicySignature [4]byte
-	chainID                *big.Int
-	monitorAddr            ethcommon.Address
-	monitorKey             *ecdsa.PrivateKey
-	reorgWindow            int
-	signer                 ethtypes.EIP155Signer
-	wallets                map[string]ethcommon.Address
+
+	flashblockNumberAddr      ethcommon.Address
+	flashblockNumberSignature [4]byte
+
+	monitorAddr ethcommon.Address
+	monitorKey  *ecdsa.PrivateKey
+
+	chainID     *big.Int
+	reorgWindow int
+	signer      ethtypes.EIP155Signer
+	wallets     map[string]ethcommon.Address
 
 	blockHeight uint64
 	blocks      *types.RingBuffer[blockRecord]
@@ -53,6 +59,9 @@ type L2 struct {
 	blocksLanded int64
 	blocksMissed int64
 	blocksSeen   int64
+
+	flashblocksLanded int64
+	flashblocksMissed int64
 
 	processBlockFailuresCount uint
 
@@ -113,6 +122,25 @@ func newL2(cfg *config.L2) (*L2, error) {
 	if cfg.MonitorBuilderPolicyContractFunctionSignature != "" {
 		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyContractFunctionSignature))
 		copy(l2.builderPolicySignature[:], h[:4])
+	}
+
+	if cfg.MonitorFlashblockNumberContract != "" {
+		addr, err := ethcommon.ParseHexOrString(cfg.MonitorFlashblockNumberContract)
+		if err != nil {
+			return nil, err
+		}
+		if len(addr) != 20 {
+			return nil, fmt.Errorf(
+				"invalid length for the builder policy contract address (want 20, got %d)",
+				len(addr),
+			)
+		}
+		copy(l2.flashblockNumberAddr[:], addr)
+	}
+
+	if cfg.MonitorFlashblockNumberContractFunctionSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorFlashblockNumberContractFunctionSignature))
+		copy(l2.flashblockNumberSignature[:], h[:4])
 	}
 
 	if cfg.ProbeTx.PrivateKey != "" { // monitorAddr, monitorKey
@@ -192,10 +220,31 @@ func newL2(cfg *config.L2) (*L2, error) {
 						zap.Uint64("block_height", l2.blockHeight),
 					)
 				} else {
-					l.Error("Failed to load the state",
-						zap.Error(err),
-						zap.String("file_name", fname),
-					)
+					legacyBlocks := types.NewRingBuffer[blockRecordLegacy](0)
+					if legacyErr := json.NewDecoder(f).Decode(&legacyBlocks); legacyErr == nil {
+						blocks := types.NewRingBuffer[blockRecord](legacyBlocks.Length())
+						for legacyBlock, ok := legacyBlocks.Pop(); ok; legacyBlock, ok = legacyBlocks.Pop() {
+							blocks.Push(blockRecord{
+								Number:           legacyBlock.Number,
+								Hash:             legacyBlock.Hash,
+								Landed:           legacyBlock.Landed,
+								FlashblocksCount: 0,
+							})
+						}
+						l2.blocks = blocks
+						if head, ok := blocks.Head(); ok {
+							l2.blockHeight = head.Number.Uint64()
+						}
+						l.Info("Loaded the legacy state",
+							zap.String("file_name", fname),
+							zap.Uint64("block_height", l2.blockHeight),
+						)
+					} else {
+						l.Error("Failed to load the state",
+							zap.Error(errors.Join(err, legacyErr)),
+							zap.String("file_name", fname),
+						)
+					}
 				}
 			}
 		}
@@ -411,13 +460,19 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	expectedBuilderTxData := []byte(fmt.Sprintf("Block Number: %s", block.Number().String()))
 
-	var builderTxCount, failedTxCount int64
+	var builderTxCount, failedTxCount, flashblockNumberTxCount int64
+
 	for _, tx := range block.Transactions() {
 		if l2.cfg.MonitorBuilderAddress != "" && l2.isBuilderTx(ctx, block, tx, expectedBuilderTxData) {
 			builderTxCount++
 		}
 
 		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyTx(tx) {
+			builderTxCount++
+		}
+
+		if l2.cfg.MonitorFlashblockNumberContract != "" && l2.isFlashblockNumberTx(ctx, block, tx) {
+			flashblockNumberTxCount++
 			builderTxCount++
 		}
 
@@ -458,9 +513,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	switch builderTxCount {
 	case 0:
 		l2.blocks.Push(blockRecord{
-			Number: block.Number(),
-			Hash:   block.Hash(),
-			Landed: false,
+			Number:           block.Number(),
+			Hash:             block.Hash(),
+			Landed:           false,
+			FlashblocksCount: flashblockNumberTxCount,
 		})
 		l2.blocksMissed++
 
@@ -488,9 +544,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	case 1:
 		l2.blocks.Push(blockRecord{
-			Number: block.Number(),
-			Hash:   block.Hash(),
-			Landed: true,
+			Number:           block.Number(),
+			Hash:             block.Hash(),
+			Landed:           true,
+			FlashblocksCount: flashblockNumberTxCount,
 		})
 		l2.blocksLanded++
 
@@ -498,6 +555,28 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
 		))
+	}
+
+	if l2.cfg.MonitorFlashblockNumberContract != "" {
+		l2.flashblocksLanded += flashblockNumberTxCount
+		l2.flashblocksMissed += (l2.cfg.FlashblocksPerBlock - flashblockNumberTxCount)
+
+		metrics.FlashblocksLandedCount.Record(ctx, l2.flashblocksLanded, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+		metrics.FlashblocksMissedCount.Record(ctx, l2.flashblocksMissed, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		if flashblockNumberTxCount < l2.cfg.FlashblocksPerBlock {
+			l.Warn("Builder missed flashblocks",
+				zap.Int64("count", l2.cfg.FlashblocksPerBlock-flashblockNumberTxCount),
+				zap.Int64("flashblocks_landed", l2.flashblocksLanded),
+				zap.Int64("flashblocks_missed", l2.flashblocksMissed),
+			)
+		}
 	}
 
 	metrics.FailedTxPerBlock.Record(ctx, failedTxCount)
@@ -541,12 +620,24 @@ func (l2 *L2) processReorgUnwind(ctx context.Context) error {
 			l2.blocksLanded--
 		} else {
 			l2.blocksMissed--
-			l.Info("Missed block was reorgd (hash)",
+			l.Info("Missed block was reorgd",
 				zap.Uint64("block_number", br.Number.Uint64()),
 				zap.Int64("blocks_landed", l2.blocksLanded),
 				zap.Int64("blocks_missed", l2.blocksMissed),
 				zap.Int64("blocks_seen", l2.blocksSeen),
 			)
+		}
+
+		if l2.cfg.MonitorFlashblockNumberContract != "" {
+			l2.flashblocksLanded -= br.FlashblocksCount
+			l2.flashblocksMissed -= (l2.cfg.FlashblocksPerBlock - br.FlashblocksCount)
+
+			if br.FlashblocksCount < l2.cfg.FlashblocksPerBlock {
+				l.Info("Missed flashblocks were reorgd",
+					zap.Int64("count", l2.cfg.FlashblocksPerBlock-br.FlashblocksCount),
+					zap.Uint64("block_number", br.Number.Uint64()),
+				)
+			}
 		}
 
 		block, err := l2.rpc.BlockByNumber(ctx, br.Number)
@@ -620,6 +711,47 @@ func (l2 *L2) isBuilderPolicyTx(
 	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0
 }
 
+func (l2 *L2) isFlashblockNumberTx(
+	ctx context.Context,
+	block *ethtypes.Block,
+	tx *ethtypes.Transaction,
+) bool {
+	if tx == nil || tx.Rejected() {
+		return false
+	}
+
+	if tx.To() == nil || tx.To().Cmp(l2.flashblockNumberAddr) != 0 {
+		return false
+	}
+
+	if len(tx.Data()) < len(l2.flashblockNumberSignature) {
+		return false
+	}
+
+	if slices.Compare(tx.Data()[:4], l2.flashblockNumberSignature[:]) != 0 {
+		return false
+	}
+
+	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		l := logutils.LoggerFromContext(ctx)
+
+		l.Warn("Failed to determine the sender for builder transaction",
+			zap.Error(err),
+			zap.String("tx", tx.Hash().Hex()),
+			zap.String("block", block.Number().String()),
+		)
+
+		return false
+	}
+
+	if from.Cmp(l2.builderAddr) != 0 {
+		return false
+	}
+
+	return true
+}
+
 func (l2 *L2) isProbeTx(
 	ctx context.Context,
 	block *ethtypes.Block,
@@ -668,7 +800,7 @@ func (l2 *L2) isProbeTx(
 	return true, txEpoch, latency
 }
 
-func (l2 *L2) observeBlockHeight(ctx context.Context, o otelapi.Observer) error {
+func (l2 *L2) observeBlockHeight(_ context.Context, o otelapi.Observer) error {
 	o.ObserveInt64(metrics.BlockHeight, int64(l2.blockHeight), otelapi.WithAttributes(
 		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},

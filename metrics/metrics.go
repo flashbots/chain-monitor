@@ -111,6 +111,28 @@ func setupBlocksMissedCount(ctx context.Context, _ *config.ProbeTx) error {
 	return nil
 }
 
+func setupFlashblocksLandedCount(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Gauge("flashblocks_landed_count",
+		otelapi.WithDescription("flashblocks landed by our builder"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksLandedCount = m
+	return nil
+}
+
+func setupFlashblocksMissedCount(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Gauge("flashblocks_missed_count",
+		otelapi.WithDescription("flashblocks missed by our builder"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksMissedCount = m
+	return nil
+}
+
 func setupBlocksSeenCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("blocks_seen_count",
 		otelapi.WithDescription("blocks seen by the monitor"),
