@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,12 +24,16 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
+
+	// from https://github.com/flashbots/flashtestations/blob/7cc7f68492fe672a823dd2dead649793aac1f216/flashtestations/src/contracts/BlockBuilderPolicy.sol
+	"github.com/flashbots/chain-monitor/contracts"
 )
 
 type L2 struct {
@@ -39,8 +44,16 @@ type L2 struct {
 
 	builderAddr ethcommon.Address
 
-	builderPolicyAddr      ethcommon.Address
-	builderPolicySignature [4]byte
+	builderPolicyAddr                     ethcommon.Address
+	builderPolicySignature                [4]byte
+	flashtestationsRegistryAddr           ethcommon.Address
+	flashtestationsRegistrySignature      [4]byte
+	flashtestationsRegistryEventSignature ethcommon.Hash
+	blockBuilderOwnerKey                  *ecdsa.PrivateKey
+	registeredTx                          chan ethcommon.Hash
+
+	registryContract           *contracts.FlashtestationsRegistry
+	blockBuilderPolicyContract *contracts.BlockBuilderPolicy
 
 	flashblockNumberAddr      ethcommon.Address
 	flashblockNumberSignature [4]byte
@@ -63,6 +76,9 @@ type L2 struct {
 	flashblocksLanded int64
 	flashblocksMissed int64
 
+	flashtestationsLanded int64
+	flashtestationsMissed int64
+
 	processBlockFailuresCount uint
 
 	monitorNonce       uint64
@@ -71,6 +87,7 @@ type L2 struct {
 	monitorProbesFailedCount int64
 	monitorProbesLandedCount int64
 	monitorProbesSentCount   int64
+	workloadId               [32]byte
 
 	unwinding         bool
 	unwindBlockHeight uint64
@@ -117,11 +134,45 @@ func newL2(cfg *config.L2) (*L2, error) {
 			)
 		}
 		copy(l2.builderPolicyAddr[:], addr)
+		blockBuilderPolicyContract, err := contracts.NewBlockBuilderPolicy(ethcommon.BytesToAddress(addr), l2.rpc.Main)
+		if err != nil {
+			return nil, err
+		}
+		l2.blockBuilderPolicyContract = blockBuilderPolicyContract
 	}
 
 	if cfg.MonitorBuilderPolicyContractFunctionSignature != "" {
 		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyContractFunctionSignature))
 		copy(l2.builderPolicySignature[:], h[:4])
+	}
+
+	if cfg.MonitorFlashtestationRegistryContract != "" {
+		addr, err := ethcommon.ParseHexOrString(cfg.MonitorFlashtestationRegistryContract)
+		if err != nil {
+			return nil, err
+		}
+		if len(addr) != 20 {
+			return nil, fmt.Errorf(
+				"invalid length for the builder policy contract address (want 20, got %d)",
+				len(addr),
+			)
+		}
+		copy(l2.flashtestationsRegistryAddr[:], addr)
+		flashtestationsRegistryContract, err := contracts.NewFlashtestationsRegistry(ethcommon.BytesToAddress(addr), l2.rpc.Main)
+		if err != nil {
+			return nil, err
+		}
+		l2.registryContract = flashtestationsRegistryContract
+	}
+
+	if cfg.MonitorFlashtestationRegistryFunctionSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorFlashtestationRegistryFunctionSignature))
+		copy(l2.flashtestationsRegistrySignature[:], h[:4])
+	}
+
+	if cfg.MonitorFlashtestationRegistryEventSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorFlashtestationRegistryEventSignature))
+		copy(l2.flashtestationsRegistryEventSignature[:], h[:])
 	}
 
 	if cfg.MonitorFlashblockNumberContract != "" {
@@ -152,6 +203,15 @@ func newL2(cfg *config.L2) (*L2, error) {
 		l2.monitorAddr = crypto.PubkeyToAddress(monitorKey.PublicKey)
 
 		l2.monitorResetTicker = time.NewTicker(cfg.ProbeTx.ResetInterval)
+	}
+
+	if cfg.AuthorizeWorkloadIdTx.PrivateKey != "" { // blockBuilderOwnerKey
+		blockBuilderOwnerKey, err := crypto.HexToECDSA(cfg.AuthorizeWorkloadIdTx.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		l2.blockBuilderOwnerKey = blockBuilderOwnerKey
+		l2.registeredTx = make(chan ethcommon.Hash)
 	}
 
 	for name, addrStr := range cfg.MonitorWalletAddresses { // wallets
@@ -285,6 +345,16 @@ func (l2 *L2) run(ctx context.Context) {
 			}
 		}()
 	}
+
+	go func() {
+		for {
+			select {
+			case txHash := <-l2.registeredTx:
+				// Process the registration transaction
+				l2.handleRegistrationTx(ctx, txHash)
+			}
+		}
+	}()
 }
 
 func (l2 *L2) persist() error {
@@ -460,7 +530,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 
 	expectedBuilderTxData := []byte(fmt.Sprintf("Block Number: %s", block.Number().String()))
 
-	var builderTxCount, failedTxCount, flashblockNumberTxCount int64
+	var builderTxCount, failedTxCount, flashblockNumberTxCount, flashtestationsTxCount int64
 
 	for _, tx := range block.Transactions() {
 		if l2.cfg.MonitorBuilderAddress != "" && l2.isBuilderTx(ctx, block, tx, expectedBuilderTxData) {
@@ -468,12 +538,17 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		}
 
 		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyTx(tx) {
+			flashtestationsTxCount++
 			builderTxCount++
 		}
 
 		if l2.cfg.MonitorFlashblockNumberContract != "" && l2.isFlashblockNumberTx(ctx, block, tx) {
 			flashblockNumberTxCount++
 			builderTxCount++
+		}
+
+		if l2.cfg.MonitorFlashtestationRegistryContract != "" && l2.isFlashtestationsRegisterTx(tx) {
+			l2.registeredTx <- tx.Hash()
 		}
 
 		if l2.monitorKey != nil {
@@ -513,10 +588,11 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 	switch builderTxCount {
 	case 0:
 		l2.blocks.Push(blockRecord{
-			Number:           block.Number(),
-			Hash:             block.Hash(),
-			Landed:           false,
-			FlashblocksCount: flashblockNumberTxCount,
+			Number:               block.Number(),
+			Hash:                 block.Hash(),
+			Landed:               false,
+			FlashblocksCount:     flashblockNumberTxCount,
+			FlashtestationsCount: flashtestationsTxCount,
 		})
 		l2.blocksMissed++
 
@@ -575,6 +651,29 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 				zap.Int64("count", l2.cfg.FlashblocksPerBlock-flashblockNumberTxCount),
 				zap.Int64("flashblocks_landed", l2.flashblocksLanded),
 				zap.Int64("flashblocks_missed", l2.flashblocksMissed),
+			)
+		}
+	}
+
+	if l2.cfg.MonitorBuilderPolicyContract != "" {
+		l2.flashtestationsLanded += flashtestationsTxCount
+		l2.flashtestationsMissed += (l2.cfg.FlashtestationsPerBlock - flashtestationsTxCount)
+
+		metrics.FlashtestationsLandedCount.Record(ctx, l2.flashtestationsLanded, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		metrics.FlashtestationsMissedCount.Record(ctx, l2.flashtestationsMissed, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		))
+
+		if flashtestationsTxCount < l2.cfg.FlashtestationsPerBlock {
+			l.Warn("Builder missed flashtestations",
+				zap.Int64("count", l2.cfg.FlashtestationsPerBlock-flashtestationsTxCount),
+				zap.Int64("flashtestations_landed", l2.flashtestationsLanded),
+				zap.Int64("flashtestations_missed", l2.flashtestationsMissed),
 			)
 		}
 	}
@@ -711,6 +810,24 @@ func (l2 *L2) isBuilderPolicyTx(
 	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0
 }
 
+func (l2 *L2) isFlashtestationsRegisterTx(
+	tx *ethtypes.Transaction,
+) bool {
+	if tx == nil || tx.Rejected() {
+		return false
+	}
+
+	if tx.To() == nil || tx.To().Cmp(l2.flashtestationsRegistryAddr) != 0 {
+		return false
+	}
+
+	if len(tx.Data()) < len(l2.flashtestationsRegistrySignature) {
+		return false
+	}
+
+	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0 && tx.From().Cmp(l2.builderAddr) == 0
+}
+
 func (l2 *L2) isFlashblockNumberTx(
 	ctx context.Context,
 	block *ethtypes.Block,
@@ -838,6 +955,33 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	}
 
 	return utils.FlattenErrors(errs)
+}
+
+func (l2 *L2) authorizeWorkloadId(ctx context.Context, workloadId [32]byte) error {
+	l := logutils.LoggerFromContext(ctx)
+	from := crypto.PubkeyToAddress(l2.blockBuilderOwnerKey.PublicKey)
+	tx, err := l2.blockBuilderPolicyContract.AddWorkloadToPolicy(&bind.TransactOpts{Context: ctx, From: from}, workloadId, "commitHash", []string{"sourceLocator"})
+	if err != nil {
+		l.Warn("Failed to authorize workload id",
+			zap.Error(err),
+		)
+		return err
+	}
+	signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.blockBuilderOwnerKey)
+	if err != nil {
+		l.Warn("Failed to sign a transaction",
+			zap.Error(err),
+		)
+		return err
+	}
+	err = l2.rpc.SendTransaction(ctx, signedTx)
+	if err != nil {
+		l.Warn("Failed to send a transaction",
+			zap.Error(err),
+		)
+		return err
+	}
+	return nil
 }
 
 func (l2 *L2) observerProbes(_ context.Context, o otelapi.Observer) error {
@@ -1015,4 +1159,74 @@ func (l2 *L2) checkAndResetProbeTxNonce(ctx context.Context) {
 		l2.monitorProbesSentCount = 0
 		l2.monitorProbesLandedCount = 0
 	}
+}
+
+func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
+	l := logutils.LoggerFromContext(ctx)
+
+	teeAddress, err := l2.getTEEAddressFromTx(ctx, txHash)
+	if err != nil {
+		l.Warn("Failed to get register tee transaction receipt",
+			zap.Error(err),
+			zap.String("tx", txHash.Hex()),
+		)
+		return
+	}
+
+	_, registration, err := l2.registryContract.GetRegistration(&bind.CallOpts{Context: ctx}, teeAddress)
+	if err != nil {
+		l.Warn("Failed to get registration",
+			zap.Error(err),
+			zap.String("teeAddress", teeAddress.Hex()),
+		)
+		return
+	}
+	workloadId, err := l2.blockBuilderPolicyContract.WorkloadIdForTDRegistration(&bind.CallOpts{Context: ctx}, registration)
+	if err != nil {
+		l.Warn("Failed to get workload id",
+			zap.Error(err),
+			zap.String("teeAddress", teeAddress.Hex()),
+		)
+		return
+	}
+
+	if l2.blockBuilderOwnerKey != nil {
+		err = l2.authorizeWorkloadId(ctx, workloadId)
+		if err != nil {
+			l.Warn("Failed to authorize workload id",
+				zap.Error(err),
+			)
+		}
+	}
+
+	l2.workloadId = workloadId
+
+	metrics.RegisteredFlashtestationsCount.Record(ctx, 1, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+		attribute.KeyValue{Key: "workload_id", Value: attribute.StringValue(hex.EncodeToString(workloadId[:]))},
+	))
+
+	return
+}
+
+// Extract TEE address from TEEServiceRegistered event
+func (l2 *L2) getTEEAddressFromTx(ctx context.Context, txHash ethcommon.Hash) (ethcommon.Address, error) {
+	receipt, err := l2.rpc.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return ethcommon.Address{}, err
+	}
+
+	if receipt.Status == ethtypes.ReceiptStatusFailed {
+		return ethcommon.Address{}, fmt.Errorf("Register tee transaction did not succeeed %s", txHash.Hex())
+	}
+
+	for _, log := range receipt.Logs {
+		if len(log.Topics) > 1 && log.Topics[0] == l2.flashtestationsRegistryEventSignature {
+			// TEE address is in Topics[1] (indexed parameter)
+			return ethcommon.BytesToAddress(log.Topics[1].Bytes()), nil
+		}
+	}
+
+	return ethcommon.Address{}, fmt.Errorf("TEEServiceRegistered event not found in tx %s", txHash.Hex())
 }

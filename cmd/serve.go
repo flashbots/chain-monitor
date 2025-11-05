@@ -91,6 +91,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       4,
 		},
 
+		&cli.Int64Flag{ // --l2-flashtestations-per-block
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.FlashtestationsPerBlock,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_FLASHTESTATIONS_PER_BLOCK"},
+			Name:        categoryL2 + "-flashtestations-per-block",
+			Usage:       "expected count of flashtestations per block on l2",
+			Value:       1,
+		},
+
 		&cli.Uint64Flag{
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.GenesisTime,
@@ -122,7 +131,41 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_POLICY_CONTRACT_FUNCTION_SIGNATURE"},
 			Name:        categoryL2 + "-monitor-builder-policy-contract-function-signature",
 			Usage:       "l2 builder flashtestations policy contract function `signature` to monitor",
-			Value:       "verifyBlockBuilderProof(uint8,bytes32)",
+			Value:       "permitVerifyBlockBuilderProof(uint8,bytes32,uint256,bytes)",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-contract
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashtestationRegistryContract,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHTESTATIONS_REGISTRY_CONTRACT"},
+			Name:        categoryL2 + "-monitor-flashtestations-registry-contract",
+			Usage:       "l2 builder flashtestations registry contract `address` to monitor",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-function-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashtestationRegistryFunctionSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHTESTATIONS_REGISTRY_CONTRACT_FUNCTION_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-flashtestations-registry-contract-function-signature",
+			Usage:       "l2 builder flashtestations registry contract function `signature` to monitor",
+			Value:       "permitRegisterTEEService(bytes,bytes,uint256,uint256,bytes)",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-event-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashtestationRegistryEventSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHTESTATIONS_REGISTRY_CONTRACT_FUNCTION_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-flashtestations-registry-contract-function-signature",
+			Usage:       "l2 builder flashtestations registry contract event `signature` to monitor",
+			Value:       "TEEServiceRegistered(address,bytes,bool)",
+		},
+
+		&cli.StringFlag{ // --l2-builder-policy-owner-private-key
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.AuthorizeWorkloadIdTx.PrivateKey,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BUILDER_POLICY_OWNER_PRIVATE_KEY"},
+			Name:        categoryL2 + "-builder-policy-owner-private-key",
+			Usage:       "builder policy owner private `key` to authorize the builder's workload id",
 		},
 
 		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract
