@@ -160,14 +160,6 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "TEEServiceRegistered(address,bytes,bool)",
 		},
 
-		&cli.StringFlag{ // --l2-builder-policy-owner-private-key
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.AuthorizeWorkloadIdTx.PrivateKey,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_BUILDER_POLICY_OWNER_PRIVATE_KEY"},
-			Name:        categoryL2 + "-builder-policy-owner-private-key",
-			Usage:       "builder policy owner private `key` to authorize the builder's workload id",
-		},
-
 		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.MonitorFlashblockNumberContract,

@@ -26,7 +26,6 @@ func New() *Config {
 		L2: &L2{
 			Dir:     dir,
 			ProbeTx: &ProbeTx{},
-			AuthorizeWorkloadIdTx: &AuthorizeWorkloadIdTx{},
 		},
 	}
 }

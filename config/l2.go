@@ -34,7 +34,6 @@ type L2 struct {
 	MonitorWalletAddresses                           map[string]string `yaml:"monitor_wallet_addresses"`
 
 	ProbeTx               *ProbeTx               `yaml:"probe"`
-	AuthorizeWorkloadIdTx *AuthorizeWorkloadIdTx `yaml:"authorize_workload_id"`
 }
 
 const (

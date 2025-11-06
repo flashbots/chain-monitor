@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,16 +23,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"go.opentelemetry.io/otel/attribute"
 	otelapi "go.opentelemetry.io/otel/metric"
-
-	// from https://github.com/flashbots/flashtestations/blob/7cc7f68492fe672a823dd2dead649793aac1f216/flashtestations/src/contracts/BlockBuilderPolicy.sol
-	"github.com/flashbots/chain-monitor/contracts"
 )
 
 type L2 struct {
@@ -49,11 +44,7 @@ type L2 struct {
 	flashtestationsRegistryAddr           ethcommon.Address
 	flashtestationsRegistrySignature      [4]byte
 	flashtestationsRegistryEventSignature ethcommon.Hash
-	blockBuilderOwnerKey                  *ecdsa.PrivateKey
 	registeredTx                          chan ethcommon.Hash
-
-	registryContract           *contracts.FlashtestationsRegistry
-	blockBuilderPolicyContract *contracts.BlockBuilderPolicy
 
 	flashblockNumberAddr      ethcommon.Address
 	flashblockNumberSignature [4]byte
@@ -134,11 +125,6 @@ func newL2(cfg *config.L2) (*L2, error) {
 			)
 		}
 		copy(l2.builderPolicyAddr[:], addr)
-		blockBuilderPolicyContract, err := contracts.NewBlockBuilderPolicy(ethcommon.BytesToAddress(addr), l2.rpc.Main)
-		if err != nil {
-			return nil, err
-		}
-		l2.blockBuilderPolicyContract = blockBuilderPolicyContract
 	}
 
 	if cfg.MonitorBuilderPolicyContractFunctionSignature != "" {
@@ -158,11 +144,6 @@ func newL2(cfg *config.L2) (*L2, error) {
 			)
 		}
 		copy(l2.flashtestationsRegistryAddr[:], addr)
-		flashtestationsRegistryContract, err := contracts.NewFlashtestationsRegistry(ethcommon.BytesToAddress(addr), l2.rpc.Main)
-		if err != nil {
-			return nil, err
-		}
-		l2.registryContract = flashtestationsRegistryContract
 	}
 
 	if cfg.MonitorFlashtestationRegistryFunctionSignature != "" {
@@ -203,15 +184,6 @@ func newL2(cfg *config.L2) (*L2, error) {
 		l2.monitorAddr = crypto.PubkeyToAddress(monitorKey.PublicKey)
 
 		l2.monitorResetTicker = time.NewTicker(cfg.ProbeTx.ResetInterval)
-	}
-
-	if cfg.AuthorizeWorkloadIdTx.PrivateKey != "" { // blockBuilderOwnerKey
-		blockBuilderOwnerKey, err := crypto.HexToECDSA(cfg.AuthorizeWorkloadIdTx.PrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		l2.blockBuilderOwnerKey = blockBuilderOwnerKey
-		l2.registeredTx = make(chan ethcommon.Hash)
 	}
 
 	for name, addrStr := range cfg.MonitorWalletAddresses { // wallets
@@ -957,33 +929,6 @@ func (l2 *L2) observeWallets(ctx context.Context, o otelapi.Observer) error {
 	return utils.FlattenErrors(errs)
 }
 
-func (l2 *L2) authorizeWorkloadId(ctx context.Context, workloadId [32]byte) error {
-	l := logutils.LoggerFromContext(ctx)
-	from := crypto.PubkeyToAddress(l2.blockBuilderOwnerKey.PublicKey)
-	tx, err := l2.blockBuilderPolicyContract.AddWorkloadToPolicy(&bind.TransactOpts{Context: ctx, From: from}, workloadId, "commitHash", []string{"sourceLocator"})
-	if err != nil {
-		l.Warn("Failed to authorize workload id",
-			zap.Error(err),
-		)
-		return err
-	}
-	signedTx, err := ethtypes.SignTx(tx, l2.signer, l2.blockBuilderOwnerKey)
-	if err != nil {
-		l.Warn("Failed to sign a transaction",
-			zap.Error(err),
-		)
-		return err
-	}
-	err = l2.rpc.SendTransaction(ctx, signedTx)
-	if err != nil {
-		l.Warn("Failed to send a transaction",
-			zap.Error(err),
-		)
-		return err
-	}
-	return nil
-}
-
 func (l2 *L2) observerProbes(_ context.Context, o otelapi.Observer) error {
 	if l2.cfg.ProbeTx.PrivateKey == "" {
 		return nil
@@ -1166,45 +1111,17 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 
 	teeAddress, err := l2.getTEEAddressFromTx(ctx, txHash)
 	if err != nil {
-		l.Warn("Failed to get register tee transaction receipt",
+		l.Warn("Failed to get register flashtestations transaction receipt",
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
 		return
 	}
 
-	_, registration, err := l2.registryContract.GetRegistration(&bind.CallOpts{Context: ctx}, teeAddress)
-	if err != nil {
-		l.Warn("Failed to get registration",
-			zap.Error(err),
-			zap.String("teeAddress", teeAddress.Hex()),
-		)
-		return
-	}
-	workloadId, err := l2.blockBuilderPolicyContract.WorkloadIdForTDRegistration(&bind.CallOpts{Context: ctx}, registration)
-	if err != nil {
-		l.Warn("Failed to get workload id",
-			zap.Error(err),
-			zap.String("teeAddress", teeAddress.Hex()),
-		)
-		return
-	}
-
-	if l2.blockBuilderOwnerKey != nil {
-		err = l2.authorizeWorkloadId(ctx, workloadId)
-		if err != nil {
-			l.Warn("Failed to authorize workload id",
-				zap.Error(err),
-			)
-		}
-	}
-
-	l2.workloadId = workloadId
-
 	metrics.RegisteredFlashtestationsCount.Record(ctx, 1, otelapi.WithAttributes(
 		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
-		attribute.KeyValue{Key: "workload_id", Value: attribute.StringValue(hex.EncodeToString(workloadId[:]))},
+		attribute.KeyValue{Key: "tee_address", Value: attribute.StringValue(teeAddress.Hex())},
 	))
 
 	return
