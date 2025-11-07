@@ -826,7 +826,7 @@ func (l2 *L2) isFlashtestationsRegisterTx(
 		return false
 	}
 
-	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0 && tx.From().Cmp(l2.builderAddr) == 0
+	return slices.Compare(tx.Data()[:4], l2.flashtestationsRegistrySignature[:]) == 0
 }
 
 func (l2 *L2) isFlashblockNumberTx(
