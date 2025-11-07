@@ -166,6 +166,17 @@ func setupRegisteredFlashtestationsCount(ctx context.Context, _ *config.ProbeTx)
 	return nil
 }
 
+func setupWorkloadAddedToPolicyCount(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Gauge("workload_added_to_policy_count",
+		otelapi.WithDescription("workload added to policy count"),
+	)
+	if err != nil {
+		return err
+	}
+	WorkloadAddedToPolicyCount = m
+	return nil
+}
+
 func setupBlocksSeenCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("blocks_seen_count",
 		otelapi.WithDescription("blocks seen by the monitor"),

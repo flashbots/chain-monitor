@@ -41,12 +41,13 @@ type L2 struct {
 
 	builderAddr ethcommon.Address
 
-	builderPolicyAddr                     ethcommon.Address
-	builderPolicySignature                [4]byte
-	flashtestationsRegistryAddr           ethcommon.Address
-	flashtestationsRegistrySignature      [4]byte
-	flashtestationsRegistryEventSignature ethcommon.Hash
-	registeredTx                          chan ethcommon.Hash
+	builderPolicyAddr                        ethcommon.Address
+	builderPolicySignature                   [4]byte
+	builderPolicyAddWorkloadIdSignature      [4]byte
+	builderPolicyAddWorkloadIdEventSignature ethcommon.Hash
+	flashtestationsRegistryAddr              ethcommon.Address
+	flashtestationsRegistrySignature         [4]byte
+	flashtestationsRegistryEventSignature    ethcommon.Hash
 
 	flashblockNumberAddr      ethcommon.Address
 	flashblockNumberSignature [4]byte
@@ -132,6 +133,16 @@ func newL2(cfg *config.L2) (*L2, error) {
 	if cfg.MonitorBuilderPolicyContractFunctionSignature != "" {
 		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyContractFunctionSignature))
 		copy(l2.builderPolicySignature[:], h[:4])
+	}
+
+	if cfg.MonitorBuilderPolicyAddWorkloadIdSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyAddWorkloadIdSignature))
+		copy(l2.builderPolicyAddWorkloadIdSignature[:], h[:4])
+	}
+
+	if cfg.MonitorBuilderPolicyAddWorkloadIdEventSignature != "" {
+		h := crypto.Keccak256Hash([]byte(cfg.MonitorBuilderPolicyAddWorkloadIdEventSignature))
+		copy(l2.builderPolicyAddWorkloadIdEventSignature[:], h[:])
 	}
 
 	if cfg.MonitorFlashtestationRegistryContract != "" {
@@ -319,16 +330,6 @@ func (l2 *L2) run(ctx context.Context) {
 			}
 		}()
 	}
-
-	go func() {
-		for {
-			select {
-			case txHash := <-l2.registeredTx:
-				// Process the registration transaction
-				l2.handleRegistrationTx(ctx, txHash)
-			}
-		}
-	}()
 }
 
 func (l2 *L2) persist() error {
@@ -511,9 +512,15 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			builderTxCount++
 		}
 
-		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyTx(tx) {
+		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyBlockProofTx(tx) {
 			flashtestationsTxCount++
 			builderTxCount++
+		}
+
+		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyAddWorkloadIdTx(tx) {
+			go func() {
+				l2.handleAddWorkloadIdTx(ctx, tx.Hash())
+			}()
 		}
 
 		if l2.cfg.MonitorFlashblockNumberContract != "" && l2.isFlashblockNumberTx(ctx, block, tx) {
@@ -522,7 +529,9 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		}
 
 		if l2.cfg.MonitorFlashtestationRegistryContract != "" && l2.isFlashtestationsRegisterTx(tx) {
-			l2.registeredTx <- tx.Hash()
+			go func() {
+				l2.handleRegistrationTx(ctx, tx.Hash())
+			}()
 		}
 
 		if l2.monitorKey != nil {
@@ -766,7 +775,7 @@ func (l2 *L2) isBuilderTx(
 	return from.Cmp(l2.builderAddr) == 0
 }
 
-func (l2 *L2) isBuilderPolicyTx(
+func (l2 *L2) isBuilderPolicyBlockProofTx(
 	tx *ethtypes.Transaction,
 ) bool {
 	if tx == nil || tx.Rejected() {
@@ -782,6 +791,24 @@ func (l2 *L2) isBuilderPolicyTx(
 	}
 
 	return slices.Compare(tx.Data()[:4], l2.builderPolicySignature[:]) == 0
+}
+
+func (l2 *L2) isBuilderPolicyAddWorkloadIdTx(
+	tx *ethtypes.Transaction,
+) bool {
+	if tx == nil || tx.Rejected() {
+		return false
+	}
+
+	if tx.To() == nil || tx.To().Cmp(l2.builderPolicyAddr) != 0 {
+		return false
+	}
+
+	if len(tx.Data()) < len(l2.builderPolicyAddWorkloadIdSignature) {
+		return false
+	}
+
+	return slices.Compare(tx.Data()[:4], l2.builderPolicyAddWorkloadIdSignature[:]) == 0
 }
 
 func (l2 *L2) isFlashtestationsRegisterTx(
@@ -1140,6 +1167,42 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 		zap.String("teeAddress", teeAddress.Hex()),
 		zap.String("workloadId", hex.EncodeToString(workloadId[:])),
 	)
+
+	return
+}
+
+func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) {
+	l := logutils.LoggerFromContext(ctx)
+
+	receipt, err := l2.rpc.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		l.Warn("Failed to get add workload id transaction receipt",
+			zap.Error(err),
+			zap.String("tx", txHash.Hex()),
+		)
+	}
+
+	if receipt.Status == ethtypes.ReceiptStatusFailed {
+		l.Warn("Add workload id transaction did not succeed",
+			zap.String("tx", txHash.Hex()),
+		)
+		return
+	}
+
+	for _, log := range receipt.Logs {
+		if len(log.Topics) > 1 && log.Topics[0] == l2.builderPolicyAddWorkloadIdEventSignature {
+			workloadId := ethcommon.BytesToAddress(log.Topics[1].Bytes())
+			l.Info("Workload added to policy",
+				zap.String("workloadId", hex.EncodeToString(workloadId[:])),
+			)
+			metrics.WorkloadAddedToPolicyCount.Record(ctx, 1, otelapi.WithAttributes(
+				attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+				attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+				attribute.KeyValue{Key: "workload_id", Value: attribute.StringValue(hex.EncodeToString(workloadId[:]))},
+			))
+			return
+		}
+	}
 
 	return
 }

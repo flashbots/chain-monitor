@@ -25,6 +25,8 @@ type L2 struct {
 	MonitorBuilderAddress                            string            `yaml:"monitor_builder_address"`
 	MonitorBuilderPolicyContract                     string            `yaml:"monitor_builder_policy_contract"`
 	MonitorBuilderPolicyContractFunctionSignature    string            `yaml:"monitor_builder_policy_contract_function_signature"`
+	MonitorBuilderPolicyAddWorkloadIdSignature       string            `yaml:"monitor_builder_policy_add_workload_id_signature"`
+	MonitorBuilderPolicyAddWorkloadIdEventSignature  string            `yaml:"monitor_builder_policy_add_workload_id_event_signature"`
 	MonitorFlashblockNumberContract                  string            `yaml:"monitor_builder_flashblock_number_contract"`
 	MonitorFlashblockNumberContractFunctionSignature string            `yaml:"monitor_builder_flashblock_number_contract_function_signature"`
 	MonitorFlashtestationRegistryContract            string            `yaml:"monitor_flashtestation_registry_contract"`

@@ -21,6 +21,7 @@ var (
 	FlashtestationsLandedCount     otelapi.Int64Gauge
 	FlashtestationsMissedCount     otelapi.Int64Gauge
 	RegisteredFlashtestationsCount otelapi.Int64Gauge
+	WorkloadAddedToPolicyCount     otelapi.Int64Gauge
 
 	ReorgsCount otelapi.Int64Counter
 	ReorgDepth  otelapi.Int64Gauge
@@ -59,6 +60,7 @@ var (
 		setupFlashtestationsLandedCount,
 		setupFlashtestationsMissedCount,
 		setupRegisteredFlashtestationsCount,
+		setupWorkloadAddedToPolicyCount,
 
 		setupReorgsCount,
 		setupReorgDepth,

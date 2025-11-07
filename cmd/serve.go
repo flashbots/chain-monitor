@@ -134,6 +134,24 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "permitVerifyBlockBuilderProof(uint8,bytes32,uint256,bytes)",
 		},
 
+		&cli.StringFlag{ // --l2-monitor-builder-policy-add-workload-id-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorBuilderPolicyAddWorkloadIdSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_POLICY_ADD_WORKLOAD_ID_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-builder-policy-add-workload-id-signature",
+			Usage:       "l2 builder policy function `signature` to add workload id",
+			Value:       "addWorkloadToPolicy(bytes32,string,string[])",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-builder-policy-add-workload-id-event-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorBuilderPolicyAddWorkloadIdEventSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_BUILDER_POLICY_ADD_WORKLOAD_ID_EVENT_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-builder-policy-add-workload-id-event-signature",
+			Usage:       "l2 builder policy event `signature` to add workload id",
+			Value:       "WorkloadAddedToPolicy(bytes32)",
+		},
+
 		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-contract
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.MonitorFlashtestationRegistryContract,
@@ -149,6 +167,15 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Name:        categoryL2 + "-monitor-flashtestations-registry-contract-function-signature",
 			Usage:       "l2 builder flashtestations registry contract function `signature` to monitor",
 			Value:       "permitRegisterTEEService(bytes,bytes,uint256,uint256,bytes)",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-event-signature
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashtestationRegistryEventSignature,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHTESTATIONS_REGISTRY_EVENT_SIGNATURE"},
+			Name:        categoryL2 + "-monitor-flashtestations-registry-event-signature",
+			Usage:       "l2 builder flashtestations registry contract event `signature` to monitor",
+			Value:       "TEEServiceRegistered(address,bytes,bool)",
 		},
 
 		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract
