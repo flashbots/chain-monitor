@@ -151,15 +151,6 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "permitRegisterTEEService(bytes,bytes,uint256,uint256,bytes)",
 		},
 
-		&cli.StringFlag{ // --l2-monitor-flashtestations-registry-event-signature
-			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorFlashtestationRegistryEventSignature,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHTESTATIONS_REGISTRY_CONTRACT_FUNCTION_SIGNATURE"},
-			Name:        categoryL2 + "-monitor-flashtestations-registry-contract-function-signature",
-			Usage:       "l2 builder flashtestations registry contract event `signature` to monitor",
-			Value:       "TEEServiceRegistered(address,bytes,bool)",
-		},
-
 		&cli.StringFlag{ // --l2-monitor-flashblock-number-contract
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.MonitorFlashblockNumberContract,
