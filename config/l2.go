@@ -33,7 +33,7 @@ type L2 struct {
 	MonitorTxReceipts                                bool              `yaml:"monitor_tx_receipts"`
 	MonitorWalletAddresses                           map[string]string `yaml:"monitor_wallet_addresses"`
 
-	ProbeTx               *ProbeTx               `yaml:"probe"`
+	ProbeTx *ProbeTx `yaml:"probe"`
 }
 
 const (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1109,9 +1111,18 @@ func (l2 *L2) checkAndResetProbeTxNonce(ctx context.Context) {
 func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 	l := logutils.LoggerFromContext(ctx)
 
-	teeAddress, err := l2.getTEEAddressFromTx(ctx, txHash)
+	teeAddress, rawQuote, err := l2.getTEEAddressAndQuoteFromTx(ctx, txHash)
 	if err != nil {
 		l.Warn("Failed to get register flashtestations transaction receipt",
+			zap.Error(err),
+			zap.String("tx", txHash.Hex()),
+		)
+		return
+	}
+
+	workloadId, err := ComputeWorkloadID(rawQuote)
+	if err != nil {
+		l.Warn("Failed to compute workload id",
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
@@ -1122,28 +1133,61 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
 		attribute.KeyValue{Key: "tee_address", Value: attribute.StringValue(teeAddress.Hex())},
+		attribute.KeyValue{Key: "workload_id", Value: attribute.StringValue(hex.EncodeToString(workloadId[:]))},
 	))
+
+	l.Info("TEE service registered",
+		zap.String("teeAddress", teeAddress.Hex()),
+		zap.String("workloadId", hex.EncodeToString(workloadId[:])),
+	)
 
 	return
 }
 
-// Extract TEE address from TEEServiceRegistered event
-func (l2 *L2) getTEEAddressFromTx(ctx context.Context, txHash ethcommon.Hash) (ethcommon.Address, error) {
+// Extract TEE address and raw quote from TEEServiceRegistered event
+func (l2 *L2) getTEEAddressAndQuoteFromTx(ctx context.Context, txHash ethcommon.Hash) (ethcommon.Address, []byte, error) {
 	receipt, err := l2.rpc.TransactionReceipt(ctx, txHash)
 	if err != nil {
-		return ethcommon.Address{}, err
+		return ethcommon.Address{}, nil, err
 	}
 
 	if receipt.Status == ethtypes.ReceiptStatusFailed {
-		return ethcommon.Address{}, fmt.Errorf("Register tee transaction did not succeeed %s", txHash.Hex())
+		return ethcommon.Address{}, nil, fmt.Errorf("Register tee transaction did not succeeed %s", txHash.Hex())
+	}
+
+	// Define the event arguments for decoding (non-indexed parameters only)
+	// event TEEServiceRegistered(address indexed teeAddress, bytes rawQuote, bool alreadyExists);
+	bytesType, _ := abi.NewType("bytes", "", nil)
+	boolType, _ := abi.NewType("bool", "", nil)
+
+	eventABI := abi.Arguments{
+		{Type: bytesType}, // rawQuote
+		{Type: boolType},  // alreadyExists
 	}
 
 	for _, log := range receipt.Logs {
 		if len(log.Topics) > 1 && log.Topics[0] == l2.flashtestationsRegistryEventSignature {
 			// TEE address is in Topics[1] (indexed parameter)
-			return ethcommon.BytesToAddress(log.Topics[1].Bytes()), nil
+			teeAddress := ethcommon.BytesToAddress(log.Topics[1].Bytes())
+
+			// Decode the data field to get rawQuote and alreadyExists
+			decoded, err := eventABI.Unpack(log.Data)
+			if err != nil {
+				return ethcommon.Address{}, nil, fmt.Errorf("failed to decode event data: %w", err)
+			}
+
+			if len(decoded) < 2 {
+				return ethcommon.Address{}, nil, fmt.Errorf("unexpected decoded data length: %d", len(decoded))
+			}
+
+			rawQuote, ok := decoded[0].([]byte)
+			if !ok {
+				return ethcommon.Address{}, nil, fmt.Errorf("failed to type assert rawQuote")
+			}
+
+			return teeAddress, rawQuote, nil
 		}
 	}
 
-	return ethcommon.Address{}, fmt.Errorf("TEEServiceRegistered event not found in tx %s", txHash.Hex())
+	return ethcommon.Address{}, nil, fmt.Errorf("TEEServiceRegistered event not found in tx %s", txHash.Hex())
 }

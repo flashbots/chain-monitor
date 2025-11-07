@@ -18,8 +18,8 @@ var (
 	FlashblocksLandedCount otelapi.Int64Gauge
 	FlashblocksMissedCount otelapi.Int64Gauge
 
-	FlashtestationsLandedCount otelapi.Int64Gauge
-	FlashtestationsMissedCount otelapi.Int64Gauge
+	FlashtestationsLandedCount     otelapi.Int64Gauge
+	FlashtestationsMissedCount     otelapi.Int64Gauge
 	RegisteredFlashtestationsCount otelapi.Int64Gauge
 
 	ReorgsCount otelapi.Int64Counter

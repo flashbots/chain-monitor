@@ -155,7 +155,7 @@ func setupFlashtestationsMissedCount(ctx context.Context, _ *config.ProbeTx) err
 	return nil
 }
 
-func setupRegisteredFlashtestationsCount(ctx context.Context, _*config.ProbeTx) error {
+func setupRegisteredFlashtestationsCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("registered_flashtestations_count",
 		otelapi.WithDescription("registered flashtestations count"),
 	)
