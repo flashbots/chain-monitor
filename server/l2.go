@@ -516,7 +516,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			flashtestationsTxCount++
 			builderTxCount++
 		}
-
+		
 		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyAddWorkloadIdTx(tx) {
 			go func() {
 				l2.handleAddWorkloadIdTx(ctx, tx.Hash())
@@ -1180,6 +1180,7 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
+		return
 	}
 
 	if receipt.Status == ethtypes.ReceiptStatusFailed {
@@ -1191,9 +1192,13 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 
 	for _, log := range receipt.Logs {
 		if len(log.Topics) > 1 && log.Topics[0] == l2.builderPolicyAddWorkloadIdEventSignature {
-			workloadId := ethcommon.BytesToAddress(log.Topics[1].Bytes())
+			// workloadId is bytes32 (32 bytes), stored directly in Topics[1]
+			// log.Topics[1] is a common.Hash which is [32]byte
+			workloadId := [32]byte(log.Topics[1])
+
 			l.Info("Workload added to policy",
 				zap.String("workloadId", hex.EncodeToString(workloadId[:])),
+				zap.String("tx", txHash.Hex()),
 			)
 			metrics.WorkloadAddedToPolicyCount.Record(ctx, 1, otelapi.WithAttributes(
 				attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
@@ -1204,7 +1209,9 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 		}
 	}
 
-	return
+	l.Warn("WorkloadAddedToPolicy event not found in transaction",
+		zap.String("tx", txHash.Hex()),
+	)
 }
 
 // Extract TEE address and raw quote from TEEServiceRegistered event

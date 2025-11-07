@@ -289,7 +289,7 @@ func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (
 	return callFallbackThenMainWithResult(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) (*ethtypes.Receipt, error) {
 		var receipt *ethtypes.Receipt
 		err := rpc.callCheckingNetworkID(ctx, cli, ethrpc.BatchElem{
-			Method: "eth_sendRawTransaction",
+			Method: "eth_getTransactionReceipt",
 			Args:   []interface{}{txHash},
 			Result: &receipt,
 		})
