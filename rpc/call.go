@@ -18,8 +18,8 @@ func callEveryoneWithResult[R any](
 		mx sync.Mutex
 		wg sync.WaitGroup
 
-		res  = make([]R, 0, len(rpc.Fallback)+1)
-		errs = make([]error, 0, len(rpc.Fallback)+1)
+		res  = make([]R, 0, len(rpc.fallback)+1)
+		errs = make([]error, 0, len(rpc.fallback)+1)
 	)
 
 	wg.Add(1)
@@ -29,7 +29,7 @@ func callEveryoneWithResult[R any](
 		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 		defer cancel()
 
-		_res, err := call(_ctx, rpc.Main)
+		_res, err := call(_ctx, rpc.main)
 
 		mx.Lock()
 		defer mx.Unlock()
@@ -43,7 +43,7 @@ func callEveryoneWithResult[R any](
 		}
 	}()
 
-	for idx, fallback := range rpc.Fallback {
+	for idx, fallback := range rpc.fallback {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -79,17 +79,17 @@ func callMainThenFallback(
 	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 	defer cancel()
 
-	err := call(_ctx, rpc.Main)
+	err := call(_ctx, rpc.main)
 	if err == nil {
 		return nil
 	}
 
-	errs := make([]error, 0, len(rpc.Fallback)+1)
+	errs := make([]error, 0, len(rpc.fallback)+1)
 	errs = append(errs, fmt.Errorf("%s: %w",
 		rpc.url.main, err,
 	))
 
-	for idx, fallback := range rpc.Fallback {
+	for idx, fallback := range rpc.fallback {
 		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 		defer cancel()
 
@@ -114,17 +114,17 @@ func callMainThenFallbackWithResult[R any](
 	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 	defer cancel()
 
-	res, err := call(_ctx, rpc.Main)
+	res, err := call(_ctx, rpc.main)
 	if err == nil {
 		return res, nil
 	}
 
-	errs := make([]error, 0, len(rpc.Fallback)+1)
+	errs := make([]error, 0, len(rpc.fallback)+1)
 	errs = append(errs, fmt.Errorf("%s: %w",
 		rpc.url.main, err,
 	))
 
-	for idx, fallback := range rpc.Fallback {
+	for idx, fallback := range rpc.fallback {
 		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 		defer cancel()
 
@@ -147,9 +147,9 @@ func callFallbackThenMainWithResult[R any](
 	rpc *RPC,
 	call func(ctx context.Context, rpc *ethclient.Client) (R, error),
 ) (R, error) {
-	errs := make([]error, 0, len(rpc.Fallback))
+	errs := make([]error, 0, len(rpc.fallback))
 
-	for idx, fallback := range rpc.Fallback {
+	for idx, fallback := range rpc.fallback {
 		_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 		defer cancel()
 
@@ -166,7 +166,7 @@ func callFallbackThenMainWithResult[R any](
 	_ctx, cancel := context.WithTimeout(ctx, rpc.timeout)
 	defer cancel()
 
-	res, err := call(_ctx, rpc.Main)
+	res, err := call(_ctx, rpc.main)
 	if err == nil {
 		return res, nil
 	}

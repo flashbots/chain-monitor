@@ -19,9 +19,9 @@ import (
 )
 
 type RPC struct {
-	Main      *ethclient.Client
+	main      *ethclient.Client
 	networkID *big.Int
-	Fallback  []*ethclient.Client
+	fallback  []*ethclient.Client
 	url       rpcUrl
 
 	timeout time.Duration
@@ -41,8 +41,8 @@ func New(networkID uint64, url string, fallback ...string) (*RPC, error) {
 	}
 
 	rpc := &RPC{
-		Main:     cli,
-		Fallback: make([]*ethclient.Client, 0, len(fallback)),
+		main:     cli,
+		fallback: make([]*ethclient.Client, 0, len(fallback)),
 		timeout:  time.Second,
 
 		url: rpcUrl{
@@ -62,15 +62,15 @@ func New(networkID uint64, url string, fallback ...string) (*RPC, error) {
 				errFailedToDial, url, err,
 			)
 		}
-		rpc.Fallback = append(rpc.Fallback, cli)
+		rpc.fallback = append(rpc.fallback, cli)
 	}
 
 	return rpc, nil
 }
 
 func (rpc *RPC) Close() {
-	rpc.Main.Close()
-	for _, rpc := range rpc.Fallback {
+	rpc.main.Close()
+	for _, rpc := range rpc.fallback {
 		rpc.Close()
 	}
 }
