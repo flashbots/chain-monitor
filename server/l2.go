@@ -73,6 +73,9 @@ type L2 struct {
 	flashtestationsLanded int64
 	flashtestationsMissed int64
 
+	addWorkloadSeen   int64
+	registrationsSeen int64
+
 	processBlockFailuresCount uint
 
 	monitorNonce       uint64
@@ -1155,7 +1158,8 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 		return
 	}
 
-	metrics.RegisteredFlashtestationsCount.Record(ctx, 1, otelapi.WithAttributes(
+	l2.registrationsSeen++
+	metrics.RegisteredFlashtestationsCount.Record(ctx, l2.registrationsSeen, otelapi.WithAttributes(
 		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
 		attribute.KeyValue{Key: "tee_address", Value: attribute.StringValue(teeAddress.Hex())},
@@ -1197,7 +1201,8 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 				zap.String("workloadId", hex.EncodeToString(workloadId[:])),
 				zap.String("tx", txHash.Hex()),
 			)
-			metrics.WorkloadAddedToPolicyCount.Record(ctx, 1, otelapi.WithAttributes(
+			l2.addWorkloadSeen++
+			metrics.WorkloadAddedToPolicyCount.Record(ctx, l2.addWorkloadSeen, otelapi.WithAttributes(
 				attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 				attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
 				attribute.KeyValue{Key: "workload_id", Value: attribute.StringValue(hex.EncodeToString(workloadId[:]))},
