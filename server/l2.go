@@ -515,7 +515,7 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 			flashtestationsTxCount++
 			builderTxCount++
 		}
-		
+
 		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyAddWorkloadIdTx(tx) {
 			go func() {
 				l2.handleAddWorkloadIdTx(ctx, tx.Hash())
@@ -1166,8 +1166,6 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 		zap.String("teeAddress", teeAddress.Hex()),
 		zap.String("workloadId", hex.EncodeToString(workloadId[:])),
 	)
-
-	return
 }
 
 func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) {
