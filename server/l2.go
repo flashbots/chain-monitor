@@ -73,8 +73,10 @@ type L2 struct {
 	flashtestationsLanded int64
 	flashtestationsMissed int64
 
-	addWorkloadSeen   int64
-	registrationsSeen int64
+	addWorkloadSeen    int64
+	addWorkloadError   int64
+	registrationsSeen  int64
+	registrationsError int64
 
 	processBlockFailuresCount uint
 
@@ -522,6 +524,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		if l2.cfg.MonitorBuilderPolicyContract != "" && l2.isBuilderPolicyAddWorkloadIdTx(tx) {
 			go func() {
 				l2.handleAddWorkloadIdTx(ctx, tx.Hash())
+				metrics.WorkloadAddedToPolicyErrorCount.Record(ctx, l2.addWorkloadError, otelapi.WithAttributes(
+					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+				))
 			}()
 		}
 
@@ -533,6 +539,10 @@ func (l2 *L2) processBlock(ctx context.Context, blockNumber uint64) error {
 		if l2.cfg.MonitorFlashtestationRegistryContract != "" && l2.isFlashtestationsRegisterTx(tx) {
 			go func() {
 				l2.handleRegistrationTx(ctx, tx.Hash())
+				metrics.RegisteredFlashtestationsErrorCount.Record(ctx, l2.registrationsError, otelapi.WithAttributes(
+					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(l2.chainID.Int64())},
+				))
 			}()
 		}
 
@@ -1146,6 +1156,7 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
+		l2.registrationsError++
 		return
 	}
 
@@ -1155,6 +1166,7 @@ func (l2 *L2) handleRegistrationTx(ctx context.Context, txHash ethcommon.Hash) {
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
+		l2.registrationsError++
 		return
 	}
 
@@ -1181,6 +1193,7 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 			zap.Error(err),
 			zap.String("tx", txHash.Hex()),
 		)
+		l2.addWorkloadError++
 		return
 	}
 
@@ -1188,6 +1201,7 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 		l.Warn("Add workload id transaction did not succeed",
 			zap.String("tx", txHash.Hex()),
 		)
+		l2.addWorkloadError++
 		return
 	}
 
@@ -1211,6 +1225,7 @@ func (l2 *L2) handleAddWorkloadIdTx(ctx context.Context, txHash ethcommon.Hash) 
 		}
 	}
 
+	l2.addWorkloadError++
 	l.Warn("WorkloadAddedToPolicy event not found in transaction",
 		zap.String("tx", txHash.Hex()),
 	)
