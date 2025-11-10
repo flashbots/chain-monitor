@@ -17,6 +17,6 @@ type blockRecord struct {
 type blockRecordLegacy struct {
 	Number           *big.Int       `json:"number"`
 	Hash             ethcommon.Hash `json:"hash"`
-	Landed           bool
-	FlashblocksCount int64 `json:"flashblocks_count"`
+	Landed           bool           `json:"landed"`
+	FlashblocksCount int64          `json:"flashblocks_count"`
 }
