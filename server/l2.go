@@ -1221,7 +1221,7 @@ func (l2 *L2) getTEEAddressAndQuoteFromTx(ctx context.Context, txHash ethcommon.
 	}
 
 	if receipt.Status == ethtypes.ReceiptStatusFailed {
-		return ethcommon.Address{}, nil, fmt.Errorf("Register tee transaction did not succeeed %s", txHash.Hex())
+		return ethcommon.Address{}, nil, fmt.Errorf("Register tee transaction did not succeed %s", txHash.Hex())
 	}
 
 	// Define the event arguments for decoding (non-indexed parameters only)
