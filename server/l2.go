@@ -81,7 +81,6 @@ type L2 struct {
 	monitorProbesFailedCount int64
 	monitorProbesLandedCount int64
 	monitorProbesSentCount   int64
-	workloadId               [32]byte
 
 	unwinding         bool
 	unwindBlockHeight uint64
