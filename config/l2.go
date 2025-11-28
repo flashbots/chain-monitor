@@ -13,19 +13,25 @@ import (
 type L2 struct {
 	Dir *Dir `yaml:"-"`
 
-	BlockTime           time.Duration `yaml:"block_time"`
-	FlashblocksPerBlock int64         `yaml:"flashblocks_per_block"`
-	GenesisTime         uint64        `yaml:"genesis_time"`
-	NetworkID           uint64        `yaml:"network_id"`
-	ReorgWindow         time.Duration `yaml:"reorg_window"`
-	Rpc                 string        `yaml:"rpc"`
-	RpcFallback         []string      `yaml:"rpc_fallback"`
+	BlockTime               time.Duration `yaml:"block_time"`
+	FlashblocksPerBlock     int64         `yaml:"flashblocks_per_block"`
+	FlashtestationsPerBlock int64         `yaml:"flashtestations_per_block"`
+	GenesisTime             uint64        `yaml:"genesis_time"`
+	NetworkID               uint64        `yaml:"network_id"`
+	ReorgWindow             time.Duration `yaml:"reorg_window"`
+	Rpc                     string        `yaml:"rpc"`
+	RpcFallback             []string      `yaml:"rpc_fallback"`
 
 	MonitorBuilderAddress                            string            `yaml:"monitor_builder_address"`
+	MonitorBuilderPolicyAddWorkloadIdEventSignature  string            `yaml:"monitor_builder_policy_add_workload_id_event_signature"`
+	MonitorBuilderPolicyAddWorkloadIdSignature       string            `yaml:"monitor_builder_policy_add_workload_id_signature"`
 	MonitorBuilderPolicyContract                     string            `yaml:"monitor_builder_policy_contract"`
 	MonitorBuilderPolicyContractFunctionSignature    string            `yaml:"monitor_builder_policy_contract_function_signature"`
 	MonitorFlashblockNumberContract                  string            `yaml:"monitor_builder_flashblock_number_contract"`
 	MonitorFlashblockNumberContractFunctionSignature string            `yaml:"monitor_builder_flashblock_number_contract_function_signature"`
+	MonitorFlashtestationRegistryContract            string            `yaml:"monitor_flashtestation_registry_contract"`
+	MonitorFlashtestationRegistryEventSignature      string            `yaml:"monitor_flashtestation_registry_event_signature"`
+	MonitorFlashtestationRegistryFunctionSignature   string            `yaml:"monitor_flashtestation_registry_function_signature"`
 	MonitorTxReceipts                                bool              `yaml:"monitor_tx_receipts"`
 	MonitorWalletAddresses                           map[string]string `yaml:"monitor_wallet_addresses"`
 
@@ -37,13 +43,14 @@ const (
 )
 
 var (
-	errL2InvalidBuilderAddress          = errors.New("invalid l2 builder address")
-	errL2InvalidBuilderPolicyContact    = errors.New("invalid l2 builder policy contract address")
-	errL2InvalidFlashblockNumberContact = errors.New("invalid l2 flashblocks number contract address")
-	errL2InvalidRpc                     = errors.New("invalid l2 rpc url")
-	errL2InvalidRpcFallback             = errors.New("invalid l2 fallback rpc url")
-	errL2InvalidWalletAddress           = errors.New("invalid l2 wallet address")
-	errL2ReorgWindowTooLarge            = errors.New("l2 reorg window is too large")
+	errL2InvalidBuilderAddress                 = errors.New("invalid l2 builder address")
+	errL2InvalidBuilderPolicyContact           = errors.New("invalid l2 builder policy contract address")
+	errL2InvalidFlashblockNumberContact        = errors.New("invalid l2 flashblocks number contract address")
+	errL2InvalidFlashtestationsRegistryContact = errors.New("invalid l2 flashtestations registry contract address")
+	errL2InvalidRpc                            = errors.New("invalid l2 rpc url")
+	errL2InvalidRpcFallback                    = errors.New("invalid l2 fallback rpc url")
+	errL2InvalidWalletAddress                  = errors.New("invalid l2 wallet address")
+	errL2ReorgWindowTooLarge                   = errors.New("l2 reorg window is too large")
 )
 
 func (cfg *L2) Validate() error {
@@ -115,6 +122,26 @@ func (cfg *L2) Validate() error {
 				errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
 					errL2InvalidBuilderPolicyContact,
 					cfg.MonitorBuilderPolicyContract,
+					len(_addr),
+				))
+			}
+		}
+	}
+
+	{ // monitor_flashtestations_registry_contract
+		if cfg.MonitorFlashtestationRegistryContract != "" {
+			_addr, err := ethcommon.ParseHexOrString(cfg.MonitorFlashtestationRegistryContract)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidFlashtestationsRegistryContact,
+					cfg.MonitorFlashtestationRegistryContract,
+					err,
+				))
+			}
+			if len(_addr) != 20 {
+				errs = append(errs, fmt.Errorf("%w: %s: invalid length (want 20, got %d)",
+					errL2InvalidFlashtestationsRegistryContact,
+					cfg.MonitorFlashtestationRegistryContract,
 					len(_addr),
 				))
 			}

@@ -275,21 +275,21 @@ func (rpc *RPC) SendTransaction(ctx context.Context, tx *ethtypes.Transaction) e
 		return err
 	}
 	rawTx := hexutil.Encode(data)
-	return callMainThenFallback(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) error {
+	return callMainThenFallbackWithBackoff(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) error {
 		var txhash hexutil.Bytes
 		return rpc.callCheckingNetworkID(ctx, cli, ethrpc.BatchElem{
 			Method: "eth_sendRawTransaction",
 			Args:   []interface{}{rawTx},
 			Result: &txhash,
 		})
-	})
+	}, 3, 100*time.Millisecond) // 3 retries with 100ms initial delay
 }
 
 func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (*ethtypes.Receipt, error) {
-	return callFallbackThenMainWithResult(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) (*ethtypes.Receipt, error) {
+	return callFallbackThenMainWithBackoffAndResult(ctx, rpc, func(ctx context.Context, cli *ethclient.Client) (*ethtypes.Receipt, error) {
 		var receipt *ethtypes.Receipt
 		err := rpc.callCheckingNetworkID(ctx, cli, ethrpc.BatchElem{
-			Method: "eth_sendRawTransaction",
+			Method: "eth_getTransactionReceipt",
 			Args:   []interface{}{txHash},
 			Result: &receipt,
 		})
@@ -297,5 +297,5 @@ func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (
 			return nil, err
 		}
 		return receipt, nil
-	})
+	}, 3, 100*time.Millisecond) // 3 retries with 100ms initial delay
 }
