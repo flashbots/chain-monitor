@@ -23,6 +23,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 	l1RpcFallback := &cli.StringSlice{}
 	l1WalletAddresses := &cli.StringSlice{}
 	l2RpcFallback := &cli.StringSlice{}
+	l2FlashblocksPrivateStreams := &cli.StringSlice{}
 	l2WalletAddresses := &cli.StringSlice{}
 
 	dirFlags := []cli.Flag{
@@ -195,6 +196,31 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       "incrementFlashblockNumber()",
 		},
 
+		&cli.Int64Flag{
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashblocksMaxWsMessageSizeKb,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_MAX_WS_MESSAGE_SIZE_KB"},
+			Name:        categoryL2 + "-monitor-flashblocks-max-ws-message-size-kb",
+			Usage:       "max size (in kb) of l2 builder flashblocks ws messages",
+			Value:       256,
+		},
+
+		&cli.StringSliceFlag{ // --l2-monitor-flashblocks-private-stream
+			Category:    strings.ToUpper(categoryL2),
+			Destination: l2FlashblocksPrivateStreams,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_PRIVATE_STREAMS"},
+			Name:        categoryL2 + "-monitor-flashblocks-private-stream",
+			Usage:       "private websocket stream(s) of l2 builder flashblocks",
+		},
+
+		&cli.StringFlag{ // --l2-monitor-flashblocks-public-stream
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashblocksPublicStream,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_PUBLIC_STREAM"},
+			Name:        categoryL2 + "-monitor-flashblocks-public-stream",
+			Usage:       "public websocket stream of l2 builder flashblocks",
+		},
+
 		&cli.BoolFlag{ // --l2-monitor-tx-receipts
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.MonitorTxReceipts,
@@ -353,6 +379,18 @@ func CommandServe(cfg *config.Config) *cli.Command {
 
 			{
 				cfg.L2.RpcFallback = l2RpcFallback.Value()
+
+				_flashblocksPrivateStreams := make(map[string]string, len(l2FlashblocksPrivateStreams.Value()))
+				for _, wa := range l2FlashblocksPrivateStreams.Value() {
+					parts := strings.Split(wa, "=")
+					if len(parts) != 2 {
+						return fmt.Errorf("invalid private flashblocks stream (must be like `name=ws://f.q.d.n:1111`): %s", wa)
+					}
+					name := strings.TrimSpace(parts[0])
+					url := strings.TrimSpace(parts[1])
+					_flashblocksPrivateStreams[name] = url
+				}
+				cfg.L2.MonitorFlashblocksPrivateStreams = _flashblocksPrivateStreams
 
 				_walletAddresses := make(map[string]string, len(l2WalletAddresses.Value()))
 				for _, wa := range l2WalletAddresses.Value() {

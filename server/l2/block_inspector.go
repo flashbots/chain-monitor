@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,9 @@ type BlockInspector struct {
 
 	blockHeight uint64
 	blocks      *types.RingBuffer[blockRecord]
+
+	flashblocks   map[uint64]map[string][]*flashblockEvent
+	mxFlashblocks sync.Mutex
 
 	metrics *blockInspectorMetrics
 
@@ -323,7 +327,10 @@ func NewBlockInspector(cfg *config.L2) (*BlockInspector, error) {
 	return bi, nil
 }
 
-func (bi *BlockInspector) Run(ctx context.Context) {
+func (bi *BlockInspector) Run(
+	ctx context.Context,
+	flashblocks *<-chan *flashblockEvent,
+) {
 	if bi == nil {
 		return
 	}
@@ -344,6 +351,21 @@ func (bi *BlockInspector) Run(ctx context.Context) {
 			}
 		}
 	}()
+
+	if flashblocks != nil {
+		bi.flashblocks = make(map[uint64]map[string][]*flashblockEvent)
+
+		go func() {
+			for {
+				select {
+				case <-bi.done:
+					return
+				case evt := <-*flashblocks:
+					bi.processFlashblock(ctx, evt)
+				}
+			}
+		}()
+	}
 }
 
 func (bi *BlockInspector) Stop() {
@@ -695,6 +717,65 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 		}
 	}
 
+	if bi.flashblocks != nil {
+		bi.mxFlashblocks.Lock()
+
+		blockHash := strings.TrimPrefix(strings.ToLower(block.Hash().String()), "0x")
+
+		if payloads, seen := bi.flashblocks[blockNumber]; seen {
+			matched := false
+		scanningPayloads:
+			for _, flashblocks := range payloads {
+				for _, fb := range flashblocks {
+					if fb != nil && strings.TrimPrefix(strings.ToLower(fb.flashblock.Diff.BlockHash), "0x") == blockHash {
+						matched = true
+
+						if fb.flashblock.Index < len(flashblocks)-1 {
+							dropped := len(flashblocks) - fb.flashblock.Index - 1
+							metrics.FlashblocksDropped.Add(ctx, int64(dropped), otelapi.WithAttributes(
+								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+							))
+							for idx := fb.flashblock.Index; idx < len(flashblocks); idx++ {
+								l.Warn("Flashblock was dropped",
+									zap.Any("flashblock", fb.flashblock),
+								)
+							}
+						}
+
+						break scanningPayloads
+					}
+				}
+			}
+
+			if !matched {
+				dropped := 0
+				for _, flashblocks := range payloads {
+					dropped += len(flashblocks)
+					for _, fb := range flashblocks {
+						if fb != nil {
+							l.Warn("Flashblock was dropped",
+								zap.Any("flashblock", fb.flashblock),
+							)
+						}
+					}
+				}
+				metrics.FlashblocksDropped.Add(ctx, int64(dropped), otelapi.WithAttributes(
+					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+				))
+			}
+		}
+
+		for fbBlockNumber := range bi.flashblocks {
+			if fbBlockNumber <= blockNumber {
+				delete(bi.flashblocks, fbBlockNumber)
+			}
+		}
+
+		bi.mxFlashblocks.Unlock()
+	}
+
 	metrics.FailedTxPerBlock.Record(ctx, failedTxCount)
 
 	if bi.blocks.Length() > bi.cfg.reorgWindow {
@@ -702,6 +783,51 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 	}
 
 	return nil
+}
+
+func (bi *BlockInspector) processFlashblock(ctx context.Context, evt *flashblockEvent) {
+	l := logutils.LoggerFromContext(ctx).With(
+		zap.Uint64("block_number", evt.flashblock.Metadata.BlockNumber),
+		zap.String("kind", "l2"),
+	)
+
+	fb := evt.flashblock
+
+	bi.mxFlashblocks.Lock()
+	defer bi.mxFlashblocks.Unlock()
+
+	if _, exists := bi.flashblocks[fb.Metadata.BlockNumber]; !exists {
+		bi.flashblocks[fb.Metadata.BlockNumber] = make(map[string][]*flashblockEvent)
+	}
+	if _, exists := bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId]; !exists {
+		bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId] = make([]*flashblockEvent, 0, bi.cfg.flashblocksPerBlock)
+	}
+
+	if len(bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId]) > fb.Index {
+		existing := bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId][fb.Index]
+		if existing == nil {
+			bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId][fb.Index] = evt
+			return // out-of-order delivery
+		}
+		if fb.Equal(existing.flashblock) {
+			return // double-delivery of the same flashblock
+		}
+		l.Warn("Received different flashblocks for the same payload id and index",
+			zap.Any("this", fb),
+			zap.Any("that", existing),
+		)
+		bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId][fb.Index] = evt
+	} else {
+		// fill up the gaps (if any)
+		for idx := len(bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId]); idx <= fb.Index; idx++ {
+			bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId] = append(
+				bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId],
+				nil,
+			)
+		}
+		// store
+		bi.flashblocks[fb.Metadata.BlockNumber][fb.PayloadId][fb.Index] = evt
+	}
 }
 
 func (bi *BlockInspector) processReorgUnwind(ctx context.Context) error {

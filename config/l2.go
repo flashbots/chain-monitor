@@ -29,6 +29,9 @@ type L2 struct {
 	MonitorBuilderPolicyContractFunctionSignature    string            `yaml:"monitor_builder_policy_contract_function_signature"`
 	MonitorFlashblockNumberContract                  string            `yaml:"monitor_builder_flashblock_number_contract"`
 	MonitorFlashblockNumberContractFunctionSignature string            `yaml:"monitor_builder_flashblock_number_contract_function_signature"`
+	MonitorFlashblocksMaxWsMessageSizeKb             int64             `yaml:"monitor_flashblocks_max_ws_message_size_kb"`
+	MonitorFlashblocksPrivateStreams                 map[string]string `yaml:"monitor_flashblocks_private_streams"`
+	MonitorFlashblocksPublicStream                   string            `yaml:"monitor_flashblocks_public_stream"`
 	MonitorFlashtestationRegistryContract            string            `yaml:"monitor_flashtestation_registry_contract"`
 	MonitorFlashtestationRegistryEventSignature      string            `yaml:"monitor_flashtestation_registry_event_signature"`
 	MonitorFlashtestationRegistryFunctionSignature   string            `yaml:"monitor_flashtestation_registry_function_signature"`
@@ -46,6 +49,9 @@ var (
 	errL2InvalidBuilderAddress                 = errors.New("invalid l2 builder address")
 	errL2InvalidBuilderPolicyContact           = errors.New("invalid l2 builder policy contract address")
 	errL2InvalidFlashblockNumberContact        = errors.New("invalid l2 flashblocks number contract address")
+	errL2InvalidFlashblocksMaxWsMessageSizeKb  = errors.New("invalid l2 flashblocks max ws message size")
+	errL2InvalidFlashblocksPrivateStream       = errors.New("invalid l2 private flashblocks stream url")
+	errL2InvalidFlashblocksPublicStream        = errors.New("invalid l2 public flashblocks stream url")
 	errL2InvalidFlashtestationsRegistryContact = errors.New("invalid l2 flashtestations registry contract address")
 	errL2InvalidRpc                            = errors.New("invalid l2 rpc url")
 	errL2InvalidRpcFallback                    = errors.New("invalid l2 fallback rpc url")
@@ -163,6 +169,39 @@ func (cfg *L2) Validate() error {
 					errL2InvalidFlashblockNumberContact,
 					cfg.MonitorFlashblockNumberContract,
 					len(_addr),
+				))
+			}
+		}
+	}
+
+	{ // monitor_flashblocks_max_ws_message_size_kb
+		if cfg.MonitorFlashblocksMaxWsMessageSizeKb < 16 || cfg.MonitorFlashblocksMaxWsMessageSizeKb > 1024 {
+			errs = append(errs, fmt.Errorf("%w: must be within [16..1024] range: %d",
+				errL2InvalidFlashblocksMaxWsMessageSizeKb,
+				cfg.MonitorFlashblocksMaxWsMessageSizeKb,
+			))
+		}
+	}
+
+	{ // monitor_flashblocks_private_streams
+		for _, flashblocks := range cfg.MonitorFlashblocksPrivateStreams {
+			if _, err := url.Parse(flashblocks); err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidFlashblocksPrivateStream,
+					flashblocks,
+					err,
+				))
+			}
+		}
+	}
+
+	{ // monitor_flashblocks_public_stream
+		if cfg.MonitorFlashblocksPublicStream != "" {
+			if _, err := url.Parse(cfg.MonitorFlashblocksPublicStream); err != nil {
+				errs = append(errs, fmt.Errorf("%w: %s: %w",
+					errL2InvalidFlashblocksPublicStream,
+					cfg.MonitorFlashblocksPublicStream,
+					err,
 				))
 			}
 		}

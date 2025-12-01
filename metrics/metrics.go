@@ -133,6 +133,65 @@ func setupFlashblocksMissedCount(ctx context.Context, _ *config.ProbeTx) error {
 	return nil
 }
 
+func setupFlashblocksDropped(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Counter("flashblocks_dropped_count",
+		otelapi.WithDescription(
+			"count of flashblocks produced by builder but not included into the block",
+		),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksDropped = m
+	return nil
+}
+
+func setupFlashblocksMismatched(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Counter("flashblocks_mismatched_count",
+		otelapi.WithDescription(
+			"count of mismatching flashblocks (all streams must produce identical flashblocks)",
+		),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksMismatched = m
+	return nil
+}
+
+func setupFlashblocksReceiveFailureCount(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Counter("flashblocks_receive_failure_count",
+		otelapi.WithDescription("count of failures to receive a flashblock"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksReceiveFailureCount = m
+	return nil
+}
+
+func setupFlashblocksReceiveSuccessCount(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Counter("flashblocks_receive_success_count",
+		otelapi.WithDescription("count of successfully received flashblocks"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksReceiveSuccessCount = m
+	return nil
+}
+
+func setupFlashblocksSkipped(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Counter("flashblocks_skipped_count",
+		otelapi.WithDescription("count of flashblocks skipped by a stream"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksSkipped = m
+	return nil
+}
+
 func setupFlashtestationsLandedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("flashtestations_landed_count",
 		otelapi.WithDescription("flashtestations landed by our builder"),
