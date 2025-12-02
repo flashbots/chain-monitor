@@ -155,7 +155,6 @@ func (fm *FlashblocksMonitor) readStream(
 				_conn, _, err := websocket.Dial(dialCtx, streamUrl, &websocket.DialOptions{
 					CompressionMode: websocket.CompressionContextTakeover,
 				})
-				_conn.SetReadLimit(fm.cfg.maxMessageSize)
 				if err != nil {
 					doneDialling()
 
@@ -174,6 +173,7 @@ func (fm *FlashblocksMonitor) readStream(
 					backoff = min(wsBackoffFactor*backoff, wsBackoffMax)
 					continue redial
 				}
+				_conn.SetReadLimit(fm.cfg.maxMessageSize)
 
 				backoff = wsBackoffMin
 				conn = _conn
