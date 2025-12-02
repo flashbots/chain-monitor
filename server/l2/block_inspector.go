@@ -736,10 +736,12 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
 							))
-							for idx := fb.flashblock.Index; idx < len(flashblocks); idx++ {
-								l.Warn("Flashblock was dropped",
-									zap.Any("flashblock", fb.flashblock),
-								)
+							for idx := fb.flashblock.Index + 1; idx < len(flashblocks); idx++ {
+								if dfb := flashblocks[idx]; dfb != nil {
+									l.Warn("Flashblock was dropped",
+										zap.Any("flashblock", fb.flashblock),
+									)
+								}
 							}
 						}
 
