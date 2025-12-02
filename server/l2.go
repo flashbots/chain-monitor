@@ -870,20 +870,7 @@ func (l2 *L2) isFlashblockNumberTx(
 		return false
 	}
 
-	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		l := logutils.LoggerFromContext(ctx)
-
-		l.Warn("Failed to determine the sender for builder transaction",
-			zap.Error(err),
-			zap.String("tx", tx.Hash().Hex()),
-			zap.String("block", block.Number().String()),
-		)
-
-		return false
-	}
-
-	if from.Cmp(l2.builderAddr) != 0 {
+	if tx.From().Cmp(l2.builderAddr) != 0 {
 		return false
 	}
 
