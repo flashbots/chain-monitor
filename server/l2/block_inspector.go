@@ -726,8 +726,10 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 			matched := false
 		scanningPayloads:
 			for _, flashblocks := range payloads {
-				for _, fb := range flashblocks {
-					if fb != nil && strings.TrimPrefix(strings.ToLower(fb.flashblock.Diff.BlockHash), "0x") == blockHash {
+				for idx := len(flashblocks) - 1; idx >= 0; idx-- {
+					if fb := flashblocks[idx]; fb != nil &&
+						strings.TrimPrefix(strings.ToLower(fb.flashblock.Diff.BlockHash), "0x") == blockHash {
+						// ---
 						matched = true
 
 						if fb.flashblock.Index < len(flashblocks)-1 {
@@ -736,8 +738,8 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
 							))
-							for idx := fb.flashblock.Index + 1; idx < len(flashblocks); idx++ {
-								if dfb := flashblocks[idx]; dfb != nil {
+							for jdx := fb.flashblock.Index + 1; jdx < len(flashblocks); jdx++ {
+								if dfb := flashblocks[jdx]; dfb != nil {
 									l.Warn("Flashblock was dropped",
 										zap.Any("flashblock", fb.flashblock),
 									)
