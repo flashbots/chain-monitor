@@ -13,13 +13,6 @@ const (
 	// Raw quote has a 48-byte header before the TD10ReportBody
 	HEADER_LENGTH      = 48
 	TD_REPORT10_LENGTH = 584
-
-	// TDX workload constants
-	TD_XFAM_FPU            = 0x0000000000000001
-	TD_XFAM_SSE            = 0x0000000000000002
-	TD_TDATTRS_VE_DISABLED = 0x0000000010000000
-	TD_TDATTRS_PKS         = 0x0000000040000000
-	TD_TDATTRS_KL          = 0x0000000080000000
 )
 
 // ComputeWorkloadID computes the workload ID from Automata's serialized verifier output
@@ -51,24 +44,10 @@ func ComputeWorkloadID(rawQuote []byte) ([32]byte, error) {
 	xfam := binary.BigEndian.Uint64(reportBody[128 : 128+8])
 	tdAttributes := binary.BigEndian.Uint64(reportBody[120 : 120+8])
 
-	// Apply transformations as per the Solidity implementation
-	// expectedXfamBits = TD_XFAM_FPU | TD_XFAM_SSE
-	expectedXfamBits := uint64(TD_XFAM_FPU | TD_XFAM_SSE)
-
-	// ignoredTdAttributesBitmask = TD_TDATTRS_VE_DISABLED | TD_TDATTRS_PKS | TD_TDATTRS_KL
-	ignoredTdAttributesBitmask := uint64(TD_TDATTRS_VE_DISABLED | TD_TDATTRS_PKS | TD_TDATTRS_KL)
-
-	// Transform xFAM: xFAM ^ expectedXfamBits
-	transformedXfam := xfam ^ expectedXfamBits
-
-	// Transform tdAttributes: tdAttributes & ~ignoredTdAttributesBitmask
-	transformedTdAttributes := tdAttributes & ^ignoredTdAttributesBitmask
-
-	// Convert transformed values back to bytes (big-endian, to match Solidity bytes8)
 	xfamBytes := make([]byte, 8)
 	tdAttributesBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(xfamBytes, transformedXfam)
-	binary.BigEndian.PutUint64(tdAttributesBytes, transformedTdAttributes)
+	binary.BigEndian.PutUint64(xfamBytes, xfam)
+	binary.BigEndian.PutUint64(tdAttributesBytes, tdAttributes)
 
 	// Concatenate all fields
 	var concatenated []byte
