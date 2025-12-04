@@ -31,19 +31,20 @@ type FlashblocksMonitor struct {
 
 	// streams
 
-	flashblocksPublic  chan *flashblockEvent
 	flashblocksPrivate chan *flashblockEvent
+	flashblocksPublic  chan *flashblockEvent
 
-	lastFlashblockPublic  *flashblockEvent
 	lastFlashblockPrivate map[string]*flashblockEvent
+	lastFlashblockPublic  map[string]*flashblockEvent
 }
 
 type flashblocksMonitorConfig struct {
-	flashblocksPerBlock int
-	networkID           int64
-	maxMessageSize      int64
-	publicStream        string
-	privateStreams      map[string]string
+	flashblocksPerBlock  int
+	networkID            int64
+	maxMessageSize       int64
+	mainPublicStreamName string
+	publicStreams        map[string]string
+	privateStreams       map[string]string
 }
 
 type flashblockEvent struct {
@@ -61,20 +62,25 @@ const (
 )
 
 func NewFlashblocksMonitor(cfg *config.L2) (*FlashblocksMonitor, error) {
-	if cfg.MonitorFlashblocksPublicStream == "" && len(cfg.MonitorFlashblocksPrivateStreams) == 0 {
+	if len(cfg.MonitorFlashblocksPrivateStreams) == 0 &&
+		len(cfg.MonitorFlashblocksPublicStreams) == 0 {
+		// ---
 		return nil, nil
 	}
 
 	fm := &FlashblocksMonitor{
-		flashblocksPublic:     make(chan *flashblockEvent, 1),
-		flashblocksPrivate:    make(chan *flashblockEvent, len(cfg.MonitorFlashblocksPublicStream)),
-		lastFlashblockPrivate: make(map[string]*flashblockEvent, len(cfg.MonitorFlashblocksPublicStream)),
+		flashblocksPrivate: make(chan *flashblockEvent, len(cfg.MonitorFlashblocksPrivateStreams)),
+		flashblocksPublic:  make(chan *flashblockEvent, len(cfg.MonitorFlashblocksPublicStreams)),
+
+		lastFlashblockPrivate: make(map[string]*flashblockEvent, len(cfg.MonitorFlashblocksPrivateStreams)),
+		lastFlashblockPublic:  make(map[string]*flashblockEvent, len(cfg.MonitorFlashblocksPublicStreams)),
 
 		cfg: &flashblocksMonitorConfig{
-			networkID:      int64(cfg.NetworkID),
-			maxMessageSize: cfg.MonitorFlashblocksMaxWsMessageSizeKb * 1024,
-			publicStream:   cfg.MonitorFlashblocksPublicStream,
-			privateStreams: cfg.MonitorFlashblocksPrivateStreams,
+			mainPublicStreamName: cfg.MonitorFlashblocksMainPublicStreamName,
+			maxMessageSize:       cfg.MonitorFlashblocksMaxWsMessageSizeKb * 1024,
+			networkID:            int64(cfg.NetworkID),
+			privateStreams:       cfg.MonitorFlashblocksPrivateStreams,
+			publicStreams:        cfg.MonitorFlashblocksPublicStreams,
 		},
 	}
 
@@ -94,11 +100,11 @@ func (fm *FlashblocksMonitor) Run(ctx context.Context) *<-chan *flashblockEvent 
 	processingContext, cancel := context.WithCancel(processingContext)
 	fm.stop = cancel
 
-	if fm.cfg.publicStream != "" {
-		fm.readStream(ctx, "public", fm.cfg.publicStream, fm.flashblocksPublic)
-	}
 	for stream, url := range fm.cfg.privateStreams {
 		fm.readStream(ctx, stream, url, fm.flashblocksPrivate)
+	}
+	for stream, url := range fm.cfg.publicStreams {
+		fm.readStream(ctx, stream, url, fm.flashblocksPublic)
 	}
 
 	flashblocks := make(chan *flashblockEvent, 2*fm.cfg.flashblocksPerBlock)
@@ -262,32 +268,38 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
+					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
 				l.Debug("Received flashblock on public stream",
 					zap.Time("timestamp", fb.timestamp),
+					zap.String("stream", fb.stream),
 					zap.Any("flashblock", fb.flashblock),
 				)
-				if fm.lastFlashblockPublic == nil {
-					fm.lastFlashblockPublic = fb
+				last, exists := fm.lastFlashblockPublic[fb.stream]
+				if !exists {
+					fm.lastFlashblockPublic[fb.stream] = fb
 					continue // it's a first flashblock we've got
 				}
 
-				fm.processFlashblock(ctx, fb, fm.lastFlashblockPublic)
-				fm.lastFlashblockPublic = fb
+				fm.processFlashblock(ctx, fb, last)
+				fm.lastFlashblockPublic[fb.stream] = fb
 				fm.detectInconsistentFlashblocks(ctx, fb)
 
-				select {
-				case output <- fb:
-					// no-op
-				default:
-					// we shouldn't block if there's no reader
+				if fb.stream == fm.cfg.mainPublicStreamName {
+					select {
+					case output <- fb:
+						// no-op
+					default:
+						// we shouldn't block if there's no reader
+					}
 				}
 
 			case fb := <-fm.flashblocksPrivate:
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
+					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
 				l.Debug("Received flashblock on private stream",
@@ -410,8 +422,11 @@ func (fm *FlashblocksMonitor) detectInconsistentFlashblocks(ctx context.Context,
 		return false
 	}
 
-	matches := compare(this, fm.lastFlashblockPublic)
+	matches := true
 	for _, that := range fm.lastFlashblockPrivate {
+		matches = matches && compare(this, that)
+	}
+	for _, that := range fm.lastFlashblockPublic {
 		matches = matches && compare(this, that)
 	}
 

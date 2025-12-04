@@ -756,7 +756,8 @@ func (bi *BlockInspector) processBlock(ctx context.Context, blockNumber uint64) 
 				dropped := 0
 				for _, flashblocks := range payloads {
 					dropped += len(flashblocks)
-					for _, fb := range flashblocks {
+					for idx := len(flashblocks); idx >= 0; idx-- {
+						fb := flashblocks[idx]
 						if fb != nil {
 							l.Warn("Flashblock was dropped",
 								zap.Any("flashblock", fb.flashblock),

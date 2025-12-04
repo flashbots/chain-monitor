@@ -29,9 +29,10 @@ type L2 struct {
 	MonitorBuilderPolicyContractFunctionSignature    string            `yaml:"monitor_builder_policy_contract_function_signature"`
 	MonitorFlashblockNumberContract                  string            `yaml:"monitor_builder_flashblock_number_contract"`
 	MonitorFlashblockNumberContractFunctionSignature string            `yaml:"monitor_builder_flashblock_number_contract_function_signature"`
+	MonitorFlashblocksMainPublicStreamName           string            `yaml:"monitor_flashblocks_main_public_stream_name"`
 	MonitorFlashblocksMaxWsMessageSizeKb             int64             `yaml:"monitor_flashblocks_max_ws_message_size_kb"`
 	MonitorFlashblocksPrivateStreams                 map[string]string `yaml:"monitor_flashblocks_private_streams"`
-	MonitorFlashblocksPublicStream                   string            `yaml:"monitor_flashblocks_public_stream"`
+	MonitorFlashblocksPublicStreams                  map[string]string `yaml:"monitor_flashblocks_public_streams"`
 	MonitorFlashtestationRegistryContract            string            `yaml:"monitor_flashtestation_registry_contract"`
 	MonitorFlashtestationRegistryEventSignature      string            `yaml:"monitor_flashtestation_registry_event_signature"`
 	MonitorFlashtestationRegistryFunctionSignature   string            `yaml:"monitor_flashtestation_registry_function_signature"`
@@ -52,6 +53,7 @@ var (
 	errL2InvalidFlashblocksMaxWsMessageSizeKb  = errors.New("invalid l2 flashblocks max ws message size")
 	errL2InvalidFlashblocksPrivateStream       = errors.New("invalid l2 private flashblocks stream url")
 	errL2InvalidFlashblocksPublicStream        = errors.New("invalid l2 public flashblocks stream url")
+	errL2InvalidFlashblocksPublicStreamName    = errors.New("invalid l2 public flashblocks stream name")
 	errL2InvalidFlashtestationsRegistryContact = errors.New("invalid l2 flashtestations registry contract address")
 	errL2InvalidRpc                            = errors.New("invalid l2 rpc url")
 	errL2InvalidRpcFallback                    = errors.New("invalid l2 fallback rpc url")
@@ -183,6 +185,17 @@ func (cfg *L2) Validate() error {
 		}
 	}
 
+	{ // monitor_flashblocks_main_public_stream_name
+		if cfg.MonitorFlashblocksMainPublicStreamName != "" {
+			if _, exists := cfg.MonitorFlashblocksPublicStreams[cfg.MonitorFlashblocksMainPublicStreamName]; !exists {
+				errs = append(errs, fmt.Errorf("%w: public stream name is not configured: %s",
+					errL2InvalidFlashblocksPublicStreamName,
+					cfg.MonitorFlashblocksMainPublicStreamName,
+				))
+			}
+		}
+	}
+
 	{ // monitor_flashblocks_private_streams
 		for _, flashblocks := range cfg.MonitorFlashblocksPrivateStreams {
 			if _, err := url.Parse(flashblocks); err != nil {
@@ -195,12 +208,12 @@ func (cfg *L2) Validate() error {
 		}
 	}
 
-	{ // monitor_flashblocks_public_stream
-		if cfg.MonitorFlashblocksPublicStream != "" {
-			if _, err := url.Parse(cfg.MonitorFlashblocksPublicStream); err != nil {
+	{ // monitor_flashblocks_public_streams
+		for _, flashblocks := range cfg.MonitorFlashblocksPublicStreams {
+			if _, err := url.Parse(flashblocks); err != nil {
 				errs = append(errs, fmt.Errorf("%w: %s: %w",
 					errL2InvalidFlashblocksPublicStream,
-					cfg.MonitorFlashblocksPublicStream,
+					flashblocks,
 					err,
 				))
 			}

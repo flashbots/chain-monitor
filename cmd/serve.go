@@ -22,8 +22,9 @@ const (
 func CommandServe(cfg *config.Config) *cli.Command {
 	l1RpcFallback := &cli.StringSlice{}
 	l1WalletAddresses := &cli.StringSlice{}
-	l2RpcFallback := &cli.StringSlice{}
 	l2FlashblocksPrivateStreams := &cli.StringSlice{}
+	l2FlashblocksPublicStreams := &cli.StringSlice{}
+	l2RpcFallback := &cli.StringSlice{}
 	l2WalletAddresses := &cli.StringSlice{}
 
 	dirFlags := []cli.Flag{
@@ -205,20 +206,28 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			Value:       256,
 		},
 
+		&cli.StringFlag{ // --l2-monitor-flashblocks-main-public-stream-name
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.MonitorFlashblocksMainPublicStreamName,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_MAIN_PUBLIC_STREAM"},
+			Name:        categoryL2 + "-monitor-flashblocks-main-public-stream",
+			Usage:       "the name of the main public l2 flashblocks stream",
+		},
+
 		&cli.StringSliceFlag{ // --l2-monitor-flashblocks-private-stream
 			Category:    strings.ToUpper(categoryL2),
 			Destination: l2FlashblocksPrivateStreams,
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_PRIVATE_STREAMS"},
 			Name:        categoryL2 + "-monitor-flashblocks-private-stream",
-			Usage:       "private websocket stream(s) of l2 builder flashblocks",
+			Usage:       "private websocket stream(s) of l2 flashblocks",
 		},
 
-		&cli.StringFlag{ // --l2-monitor-flashblocks-public-stream
+		&cli.StringSliceFlag{ // --l2-monitor-flashblocks-public-stream
 			Category:    strings.ToUpper(categoryL2),
-			Destination: &cfg.L2.MonitorFlashblocksPublicStream,
-			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_PUBLIC_STREAM"},
+			Destination: l2FlashblocksPublicStreams,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCKS_PUBLIC_STREAMS"},
 			Name:        categoryL2 + "-monitor-flashblocks-public-stream",
-			Usage:       "public websocket stream of l2 builder flashblocks",
+			Usage:       "public websocket stream(s) of l2 flashblocks",
 		},
 
 		&cli.BoolFlag{ // --l2-monitor-tx-receipts
@@ -380,29 +389,47 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			{
 				cfg.L2.RpcFallback = l2RpcFallback.Value()
 
-				_flashblocksPrivateStreams := make(map[string]string, len(l2FlashblocksPrivateStreams.Value()))
-				for _, wa := range l2FlashblocksPrivateStreams.Value() {
-					parts := strings.Split(wa, "=")
-					if len(parts) != 2 {
-						return fmt.Errorf("invalid private flashblocks stream (must be like `name=ws://f.q.d.n:1111`): %s", wa)
+				{
+					_flashblocksPrivateStreams := make(map[string]string, len(l2FlashblocksPrivateStreams.Value()))
+					for _, wa := range l2FlashblocksPrivateStreams.Value() {
+						parts := strings.Split(wa, "=")
+						if len(parts) != 2 {
+							return fmt.Errorf("invalid private flashblocks stream (must be like `name=ws://f.q.d.n:1111`): %s", wa)
+						}
+						name := strings.TrimSpace(parts[0])
+						url := strings.TrimSpace(parts[1])
+						_flashblocksPrivateStreams[name] = url
 					}
-					name := strings.TrimSpace(parts[0])
-					url := strings.TrimSpace(parts[1])
-					_flashblocksPrivateStreams[name] = url
+					cfg.L2.MonitorFlashblocksPrivateStreams = _flashblocksPrivateStreams
 				}
-				cfg.L2.MonitorFlashblocksPrivateStreams = _flashblocksPrivateStreams
 
-				_walletAddresses := make(map[string]string, len(l2WalletAddresses.Value()))
-				for _, wa := range l2WalletAddresses.Value() {
-					parts := strings.Split(wa, "=")
-					if len(parts) != 2 {
-						return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+				{
+					_flashblocksPublicStreams := make(map[string]string, len(l2FlashblocksPublicStreams.Value()))
+					for _, wa := range l2FlashblocksPublicStreams.Value() {
+						parts := strings.Split(wa, "=")
+						if len(parts) != 2 {
+							return fmt.Errorf("invalid public flashblocks stream (must be like `name=ws://f.q.d.n:1111`): %s", wa)
+						}
+						name := strings.TrimSpace(parts[0])
+						url := strings.TrimSpace(parts[1])
+						_flashblocksPublicStreams[name] = url
 					}
-					name := strings.TrimSpace(parts[0])
-					addr := strings.TrimSpace(parts[1])
-					_walletAddresses[name] = addr
+					cfg.L2.MonitorFlashblocksPublicStreams = _flashblocksPublicStreams
 				}
-				cfg.L2.MonitorWalletAddresses = _walletAddresses
+
+				{
+					_walletAddresses := make(map[string]string, len(l2WalletAddresses.Value()))
+					for _, wa := range l2WalletAddresses.Value() {
+						parts := strings.Split(wa, "=")
+						if len(parts) != 2 {
+							return fmt.Errorf("invalid wallet address (mush be like `name=0xNNNN`): %s", wa)
+						}
+						name := strings.TrimSpace(parts[0])
+						addr := strings.TrimSpace(parts[1])
+						_walletAddresses[name] = addr
+					}
+					cfg.L2.MonitorWalletAddresses = _walletAddresses
+				}
 			}
 
 			return cfg.Validate()
