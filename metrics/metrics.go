@@ -136,7 +136,7 @@ func setupFlashblocksMissedCount(ctx context.Context, _ *config.ProbeTx) error {
 func setupFlashblocksDropped(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Counter("flashblocks_dropped_count",
 		otelapi.WithDescription(
-			"count of flashblocks produced by builder but not included into the block",
+			"count of flashblocks that were produced by builder but were not included into the block",
 		),
 	)
 	if err != nil {
@@ -183,7 +183,7 @@ func setupFlashblocksReceiveSuccessCount(ctx context.Context, _ *config.ProbeTx)
 
 func setupFlashblocksSkipped(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Counter("flashblocks_skipped_count",
-		otelapi.WithDescription("count of flashblocks skipped by a stream"),
+		otelapi.WithDescription("count of flashblocks skipped by a stream (e.g. receiving index 4 right after 0 means 3 skipped flashblocks)"),
 	)
 	if err != nil {
 		return err
