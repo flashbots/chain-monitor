@@ -1,4 +1,4 @@
-package server
+package l2
 
 // Implementation based on https://github.com/flashbots/flashtestations/tree/7cc7f68492fe672a823dd2dead649793aac1f216
 import (

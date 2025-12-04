@@ -1,4 +1,4 @@
-package server
+package l2
 
 import (
 	"math/big"

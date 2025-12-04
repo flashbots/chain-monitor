@@ -1,4 +1,4 @@
-package server
+package l2
 
 import (
 	"encoding/json"
@@ -18,7 +18,7 @@ func TestBlockRecordMarshalling(t *testing.T) {
 
 	bytes, err := json.Marshal(b)
 	assert.NoError(t, err)
-	assert.Equal(t, `{"number":42,"hash":"0x4242424242424242424242424242424242424242424242424242424242424242","Landed":true}`, string(bytes))
+	assert.Equal(t, `{"number":42,"hash":"0x4242424242424242424242424242424242424242424242424242424242424242","landed":true,"flashblocks_count":0}`, string(bytes))
 
 	b2 := &blockRecord{}
 	err = json.Unmarshal(bytes, b2)

@@ -106,9 +106,7 @@ func (s *Server) Run() error {
 	}()
 
 	{ // run the monitors
-		if s.l1 != nil {
-			s.l1.run(ctx)
-		}
+		s.l1.run(ctx)
 		s.l2.run(ctx)
 	}
 
@@ -144,9 +142,7 @@ func (s *Server) Run() error {
 
 	{ // stop the monitors
 		s.l2.stop()
-		if s.l1 != nil {
-			s.l1.stop()
-		}
+		s.l1.stop()
 	}
 
 	{ // stop the server
@@ -159,21 +155,12 @@ func (s *Server) Run() error {
 		}
 	}
 
-	{ // close the rpc clients
-		s.l2.rpc.Close()
-		if s.l1 != nil {
-			s.l1.rpc.Close()
-		}
-	}
-
 	return utils.FlattenErrors(errs)
 }
 
 func (s *Server) observe(ctx context.Context, o otelapi.Observer) error {
 	return errors.Join(
 		s.l1.observeWallets(ctx, o),
-		s.l2.observeBlockHeight(ctx, o),
-		s.l2.observeWallets(ctx, o),
-		s.l2.observerProbes(ctx, o),
+		s.l2.observe(ctx, o),
 	)
 }
