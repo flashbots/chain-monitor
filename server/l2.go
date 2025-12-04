@@ -14,6 +14,7 @@ import (
 
 type L2 struct {
 	blockInspector            *l2.BlockInspector
+	flashblocksMonitor        *l2.FlashblocksMonitor
 	txInclusionLatencyMonitor *l2.TxInclusionLatencyMonitor
 	walletObserver            *wallet.Observer
 
@@ -25,6 +26,14 @@ func newL2(cfg *config.L2) (*L2, error) {
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to initialise block inspector: %w",
+			err,
+		)
+	}
+
+	flashblocksMonitor, err := l2.NewFlashblocksMonitor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to initialise flashblocks monitor: %w",
 			err,
 		)
 	}
@@ -47,6 +56,7 @@ func newL2(cfg *config.L2) (*L2, error) {
 
 	return &L2{
 		blockInspector:            blockInspector,
+		flashblocksMonitor:        flashblocksMonitor,
 		txInclusionLatencyMonitor: txInclusionLatencyMonitor,
 		walletObserver:            walletObserver,
 	}, nil
@@ -60,7 +70,8 @@ func (l2 *L2) run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	l2.canceller = cancel
 
-	l2.blockInspector.Run(ctx)
+	flashblocks := l2.flashblocksMonitor.Run(ctx)
+	l2.blockInspector.Run(ctx, flashblocks)
 	l2.txInclusionLatencyMonitor.Run(ctx)
 	l2.walletObserver.Run(ctx)
 }
@@ -72,6 +83,7 @@ func (l2 *L2) stop() {
 
 	l2.walletObserver.Stop()
 	l2.txInclusionLatencyMonitor.Stop()
+	l2.flashblocksMonitor.Stop()
 	l2.blockInspector.Stop()
 }
 
@@ -79,6 +91,10 @@ func (l2 *L2) observe(ctx context.Context, o otelapi.Observer) error {
 	errs := make([]error, 0)
 
 	if err := l2.blockInspector.Observe(ctx, o); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := l2.flashblocksMonitor.Observe(ctx, o); err != nil {
 		errs = append(errs, err)
 	}
 
