@@ -296,6 +296,9 @@ func (rpc *RPC) TransactionReceipt(ctx context.Context, txHash ethcommon.Hash) (
 		if err != nil {
 			return nil, err
 		}
+		if receipt == nil {
+			return nil, errors.New("transaction has no receipt")
+		}
 		return receipt, nil
 	}, 3, 100*time.Millisecond) // 3 retries with 100ms initial delay
 }
