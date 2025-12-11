@@ -1015,24 +1015,7 @@ func (bi *BlockInspector) isFlashblockNumberTx(
 		return false
 	}
 
-	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		l := logutils.LoggerFromContext(ctx)
-
-		l.Warn("Failed to determine the sender for flashblock number transaction",
-			zap.Error(err),
-			zap.String("tx", tx.Hash().Hex()),
-			zap.String("block", block.Number().String()),
-		)
-
-		return false
-	}
-
-	if from.Cmp(bi.cfg.builderAddr) != 0 {
-		return false
-	}
-
-	return true
+	return tx.From().Cmp(bi.cfg.builderAddr) == 0
 }
 
 func (bi *BlockInspector) isProbeTx(
