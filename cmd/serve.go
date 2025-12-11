@@ -194,7 +194,7 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_MONITOR_FLASHBLOCK_NUMBER_CONTRACT_FUNCTION_SIGNATURE"},
 			Name:        categoryL2 + "-monitor-flashblock-number-contract-function-signature",
 			Usage:       "l2 builder flashblock number contract function `signature` to monitor",
-			Value:       "incrementFlashblockNumber()",
+			Value:       "permitIncrementFlashblockNumber()",
 		},
 
 		&cli.Int64Flag{
