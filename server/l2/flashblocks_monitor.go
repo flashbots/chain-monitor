@@ -168,6 +168,7 @@ func (fm *FlashblocksMonitor) readStream(
 						attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 						attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
 						attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+						attribute.KeyValue{Key: "failure_type", Value: attribute.StringValue("dial")},
 					))
 					l.Warn("Failed to connect to flashblocks stream",
 						zap.Error(err),
@@ -195,6 +196,7 @@ func (fm *FlashblocksMonitor) readStream(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+							attribute.KeyValue{Key: "failure_type", Value: attribute.StringValue("read")},
 						))
 						l.Warn("Failed to read message from flashblocks stream",
 							zap.Error(err),
@@ -216,6 +218,7 @@ func (fm *FlashblocksMonitor) readStream(
 								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 								attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
 								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+								attribute.KeyValue{Key: "failure_type", Value: attribute.StringValue("decompress")},
 							))
 							l.Warn("Failed to decompress binary message from flashblocks stream, ignoring...",
 								zap.Error(err),
@@ -236,6 +239,7 @@ func (fm *FlashblocksMonitor) readStream(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+							attribute.KeyValue{Key: "failure_type", Value: attribute.StringValue("unmarshal")},
 						))
 						l.Error("Failed to parse flashblock",
 							zap.Error(err),
