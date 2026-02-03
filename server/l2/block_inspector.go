@@ -342,12 +342,17 @@ func (bi *BlockInspector) Run(
 	bi.done = make(chan struct{})
 
 	go func() {
+		var lag uint64
+		if flashblocks != nil {
+			lag = 1
+		}
+
 		for {
 			select {
 			case <-bi.done:
 				return
 			case <-bi.blockTicker.C:
-				bi.processNewBlocks(processingContext)
+				bi.processNewBlocks(processingContext, lag)
 			}
 		}
 	}()
@@ -435,7 +440,7 @@ func (bi *BlockInspector) persist() error {
 	return nil
 }
 
-func (bi *BlockInspector) processNewBlocks(ctx context.Context) {
+func (bi *BlockInspector) processNewBlocks(ctx context.Context, lag uint64) {
 	l := logutils.LoggerFromContext(ctx)
 
 	var blockHeight uint64
@@ -454,6 +459,8 @@ func (bi *BlockInspector) processNewBlocks(ctx context.Context) {
 	} else {
 		blockHeight = (uint64(time.Now().Unix()) - bi.cfg.genesisTime) / uint64(bi.cfg.blockTime.Seconds())
 	}
+
+	blockHeight -= lag
 
 	if blockHeight == bi.blockHeight {
 		l.Debug("Still at the same height, skipping...",
