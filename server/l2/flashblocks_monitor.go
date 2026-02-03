@@ -39,6 +39,8 @@ type FlashblocksMonitor struct {
 }
 
 type flashblocksMonitorConfig struct {
+	genesisTime          int64
+	secondsPerBlock      int64
 	flashblocksPerBlock  int
 	networkID            int64
 	maxMessageSize       int64
@@ -76,6 +78,8 @@ func NewFlashblocksMonitor(cfg *config.L2) (*FlashblocksMonitor, error) {
 		lastFlashblockPublic:  make(map[string]*flashblockEvent, len(cfg.MonitorFlashblocksPublicStreams)),
 
 		cfg: &flashblocksMonitorConfig{
+			genesisTime:          int64(cfg.GenesisTime),
+			secondsPerBlock:      int64(cfg.BlockTime / time.Second),
 			mainPublicStreamName: cfg.MonitorFlashblocksMainPublicStreamName,
 			maxMessageSize:       cfg.MonitorFlashblocksMaxWsMessageSizeKb * 1024,
 			networkID:            int64(cfg.NetworkID),
@@ -265,14 +269,19 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 		for ctx.Err() == nil {
 			select {
 			case fb := <-fm.flashblocksPublic:
+				now := time.Now().UnixNano()
+				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
+				offset := float64(1000000000-(blockTime-now)) / 1000000
+
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
 					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
-				l.Debug("Received flashblock on public stream",
+				l.Info("Received flashblock on public stream",
 					zap.Time("timestamp", fb.timestamp),
+					zap.Float64("offset_ms", offset),
 					zap.String("stream", fb.stream),
 					zap.Any("flashblock", fb.flashblock),
 				)
