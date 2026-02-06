@@ -192,6 +192,17 @@ func setupFlashblocksSkipped(ctx context.Context, _ *config.ProbeTx) error {
 	return nil
 }
 
+func setupFlashblocksStreamUp(ctx context.Context, _ *config.ProbeTx) error {
+	m, err := meter.Int64Gauge("flashblocks_stream_up",
+		otelapi.WithDescription("whether the flashblocks stream is up and connected (1 = up, 0 = down)"),
+	)
+	if err != nil {
+		return err
+	}
+	FlashblocksStreamUp = m
+	return nil
+}
+
 func setupFlashtestationsLandedCount(ctx context.Context, _ *config.ProbeTx) error {
 	m, err := meter.Int64Gauge("flashtestations_landed_count",
 		otelapi.WithDescription("flashtestations landed by our builder"),
