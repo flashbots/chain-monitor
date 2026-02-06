@@ -186,6 +186,7 @@ func (fm *FlashblocksMonitor) readStream(
 					metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 						attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 						attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+						attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 						attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 					))
 					metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
@@ -227,6 +228,7 @@ func (fm *FlashblocksMonitor) readStream(
 						metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+							attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 						))
 						metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
@@ -254,6 +256,7 @@ func (fm *FlashblocksMonitor) readStream(
 							metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 								attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+								attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 							))
 							l.Warn("Failed to decompress binary message from flashblocks stream, ignoring...",
@@ -274,6 +277,7 @@ func (fm *FlashblocksMonitor) readStream(
 						metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+							attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 						))
 						l.Error("Failed to parse flashblock",
