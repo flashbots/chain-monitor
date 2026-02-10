@@ -467,7 +467,7 @@ func (fm *FlashblocksMonitor) detectInconsistentFlashblocks(ctx context.Context,
 
 func (fm *FlashblocksMonitor) initializeMetricsFlashblocksStreams(ctx context.Context) {
 	// initialize stream health metrics to 0 for all streams to ensure
-	// metrics always exist regardless of builder health
+	// metrics always exist regardless of stream connectivity
 
 	// FlashblocksStreamUp gauge for private and public streams
 	for stream := range fm.cfg.privateStreams {
