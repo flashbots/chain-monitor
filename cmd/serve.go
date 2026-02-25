@@ -257,6 +257,14 @@ func CommandServe(cfg *config.Config) *cli.Command {
 			DefaultText: "do not check",
 		},
 
+		&cli.BoolFlag{ // --l2-probe-tx-enabled
+			Category:    strings.ToUpper(categoryL2),
+			Destination: &cfg.L2.ProbeTx.Enabled,
+			EnvVars:     []string{envPrefix + strings.ToUpper(categoryL2) + "_PROBE_TX_ENABLED"},
+			Name:        categoryL2 + "-probe-tx-enabled",
+			Usage:       "enable l2 probe transactions (requires private key to be set)",
+		},
+
 		&cli.Uint64Flag{ // --l2-probe-tx-gas-limit
 			Category:    strings.ToUpper(categoryL2),
 			Destination: &cfg.L2.ProbeTx.GasLimit,

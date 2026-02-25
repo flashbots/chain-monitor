@@ -62,11 +62,17 @@ type txInclusionLatencyMonitorMetrics struct {
 }
 
 func NewTxInclusionLatencyMonitor(cfg *config.L2) (*TxInclusionLatencyMonitor, error) {
-	if cfg.ProbeTx.PrivateKey == "" {
+	l := zap.L()
+
+	if !cfg.ProbeTx.Enabled || cfg.ProbeTx.PrivateKey == "" {
+		l.Info("Tx probes disabled",
+			zap.Bool("enabled", cfg.ProbeTx.Enabled),
+			zap.Bool("required_private_key_set", cfg.ProbeTx.PrivateKey != ""),
+		)
 		return nil, nil
 	}
 
-	l := zap.L()
+	l.Info("Tx probes enabled")
 
 	m := &TxInclusionLatencyMonitor{
 		metrics: &txInclusionLatencyMonitorMetrics{},

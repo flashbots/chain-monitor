@@ -10,6 +10,7 @@ import (
 )
 
 type ProbeTx struct {
+	Enabled    bool   `yaml:"enabled"`
 	PrivateKey string `yaml:"private_key"`
 
 	ResetInterval  time.Duration `yaml:"reset_interval"`

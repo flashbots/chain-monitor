@@ -100,11 +100,13 @@ func (fm *FlashblocksMonitor) Run(ctx context.Context) *<-chan *flashblockEvent 
 	processingContext, cancel := context.WithCancel(processingContext)
 	fm.stop = cancel
 
+	fm.initializeMetricsFlashblocksStreams(ctx)
+
 	for stream, url := range fm.cfg.privateStreams {
-		fm.readStream(ctx, stream, url, fm.flashblocksPrivate)
+		fm.readStream(ctx, stream, url, "private", fm.flashblocksPrivate)
 	}
 	for stream, url := range fm.cfg.publicStreams {
-		fm.readStream(ctx, stream, url, fm.flashblocksPublic)
+		fm.readStream(ctx, stream, url, "public", fm.flashblocksPublic)
 	}
 
 	flashblocks := make(chan *flashblockEvent, 2*fm.cfg.flashblocksPerBlock)
@@ -135,7 +137,7 @@ func (fm *FlashblocksMonitor) Observe(_ context.Context, o otelapi.Observer) err
 
 func (fm *FlashblocksMonitor) readStream(
 	ctx context.Context,
-	streamID, streamUrl string,
+	streamID, streamUrl, streamType string,
 	flashblocks chan<- *flashblockEvent,
 ) {
 	go func() {
@@ -167,6 +169,13 @@ func (fm *FlashblocksMonitor) readStream(
 					metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 						attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 						attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+						attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
+						attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+					))
+					metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
+						attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+						attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+						attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 						attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 					))
 					l.Warn("Failed to connect to flashblocks stream",
@@ -184,6 +193,14 @@ func (fm *FlashblocksMonitor) readStream(
 				backoff = wsBackoffMin
 				conn = _conn
 				doneReceiving = doneDialling
+
+				// connection successful - set stream_up to 1
+				metrics.FlashblocksStreamUp.Record(ctx, 1, otelapi.WithAttributes(
+					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
+					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+				))
 			}
 
 			{ // receive
@@ -194,6 +211,13 @@ func (fm *FlashblocksMonitor) readStream(
 						metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+							attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
+							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+						))
+						metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
+							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+							attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 						))
 						l.Warn("Failed to read message from flashblocks stream",
@@ -215,6 +239,7 @@ func (fm *FlashblocksMonitor) readStream(
 							metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 								attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 								attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+								attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 								attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 							))
 							l.Warn("Failed to decompress binary message from flashblocks stream, ignoring...",
@@ -235,6 +260,7 @@ func (fm *FlashblocksMonitor) readStream(
 						metrics.FlashblocksReceiveFailureCount.Add(ctx, 1, otelapi.WithAttributes(
 							attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 							attribute.KeyValue{Key: "stream", Value: attribute.StringValue(streamID)},
+							attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue(streamType)},
 							attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 						))
 						l.Error("Failed to parse flashblock",
@@ -434,6 +460,59 @@ func (fm *FlashblocksMonitor) detectInconsistentFlashblocks(ctx context.Context,
 		metrics.FlashblocksMismatched.Add(ctx, 1, otelapi.WithAttributes(
 			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(this.stream)},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+	}
+}
+
+func (fm *FlashblocksMonitor) initializeMetricsFlashblocksStreams(ctx context.Context) {
+	// initialize stream health metrics to 0 for all streams to ensure
+	// metrics always exist regardless of stream connectivity
+
+	// FlashblocksStreamUp gauge for private and public streams
+	for stream := range fm.cfg.privateStreams {
+		metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+	}
+	for stream := range fm.cfg.publicStreams {
+		metrics.FlashblocksStreamUp.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+	}
+
+	// FlashblocksReceiveSuccess/FailureCount counters for private and public streams
+	for stream := range fm.cfg.privateStreams {
+		metrics.FlashblocksReceiveSuccessCount.Add(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+		metrics.FlashblocksReceiveFailureCount.Add(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+	}
+	for stream := range fm.cfg.publicStreams {
+		metrics.FlashblocksReceiveSuccessCount.Add(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
+		))
+		metrics.FlashblocksReceiveFailureCount.Add(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "stream", Value: attribute.StringValue(stream)},
+			attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
 			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 		))
 	}

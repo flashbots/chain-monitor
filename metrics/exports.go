@@ -23,6 +23,7 @@ var (
 	FlashblocksReceiveFailureCount otelapi.Int64Counter
 	FlashblocksReceiveSuccessCount otelapi.Int64Counter
 	FlashblocksSkipped             otelapi.Int64Counter
+	FlashblocksStreamUp            otelapi.Int64Gauge
 
 	FlashtestationsLandedCount          otelapi.Int64Gauge
 	FlashtestationsMissedCount          otelapi.Int64Gauge
@@ -70,6 +71,7 @@ var (
 		setupFlashblocksReceiveFailureCount,
 		setupFlashblocksReceiveSuccessCount,
 		setupFlashblocksSkipped,
+		setupFlashblocksStreamUp,
 
 		setupFlashtestationsLandedCount,
 		setupFlashtestationsMissedCount,

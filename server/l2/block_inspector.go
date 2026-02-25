@@ -246,7 +246,7 @@ func NewBlockInspector(cfg *config.L2) (*BlockInspector, error) {
 	}
 
 	{ // monitor tx address
-		if cfg.ProbeTx.PrivateKey != "" {
+		if cfg.ProbeTx.Enabled && cfg.ProbeTx.PrivateKey != "" {
 			monitorKey, err := crypto.HexToECDSA(cfg.ProbeTx.PrivateKey)
 			if err != nil {
 				return nil, err
@@ -334,6 +334,8 @@ func (bi *BlockInspector) Run(
 	if bi == nil {
 		return
 	}
+
+	bi.initializeMetrics(ctx)
 
 	processingContext := logutils.ContextWithLogger(
 		context.Background(),
@@ -1229,4 +1231,62 @@ func (bi *BlockInspector) getTEEAddressAndQuoteFromTx(ctx context.Context, txHas
 	}
 
 	return ethcommon.Address{}, nil, fmt.Errorf("TEEServiceRegistered event not found in tx %s", txHash.Hex())
+}
+
+func (bi *BlockInspector) initializeMetrics(ctx context.Context) {
+	// initialize block inspector metrics to 0 to ensure
+	// metrics always exist regardless of block processing state
+
+	metrics.BlocksSeenCount.Record(ctx, 0, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+	))
+
+	metrics.BlocksLandedCount.Record(ctx, 0, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+	))
+
+	metrics.BlocksMissedCount.Record(ctx, 0, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+	))
+
+	metrics.BlockMissed.Record(ctx, 0, otelapi.WithAttributes(
+		attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+		attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+	))
+
+	if bi.cfg.flashblockNumberAddrInitialised {
+		metrics.FlashblocksLandedCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+		metrics.FlashblocksMissedCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+	}
+
+	if bi.cfg.builderPolicyAddrInitialised {
+		metrics.FlashtestationsLandedCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+		metrics.FlashtestationsMissedCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+		metrics.WorkloadAddedToPolicyErrorCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+	}
+
+	if bi.cfg.flashtestationsRegistryAddrInitialised {
+		metrics.RegisteredFlashtestationsErrorCount.Record(ctx, 0, otelapi.WithAttributes(
+			attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
+			attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(bi.cfg.chainID.Int64())},
+		))
+	}
 }
