@@ -246,7 +246,7 @@ func NewBlockInspector(cfg *config.L2) (*BlockInspector, error) {
 	}
 
 	{ // monitor tx address
-		if cfg.ProbeTx.PrivateKey != "" {
+		if cfg.ProbeTx.Enabled && cfg.ProbeTx.PrivateKey != "" {
 			monitorKey, err := crypto.HexToECDSA(cfg.ProbeTx.PrivateKey)
 			if err != nil {
 				return nil, err

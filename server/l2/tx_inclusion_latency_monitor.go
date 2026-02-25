@@ -62,7 +62,7 @@ type txInclusionLatencyMonitorMetrics struct {
 }
 
 func NewTxInclusionLatencyMonitor(cfg *config.L2) (*TxInclusionLatencyMonitor, error) {
-	if cfg.ProbeTx.PrivateKey == "" {
+	if !cfg.ProbeTx.Enabled || cfg.ProbeTx.PrivateKey == "" {
 		return nil, nil
 	}
 
