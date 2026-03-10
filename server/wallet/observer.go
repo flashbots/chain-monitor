@@ -44,7 +44,9 @@ func NewObserver(networkID uint64, rpcUrl string, rpcFallbackUrls []string, wall
 	}
 
 	{ // chainID
-		chainID, err := obs.rpc.NetworkID(context.Background())
+		chainID, err := rpc.RetryOnStartup(func() (*big.Int, error) {
+			return obs.rpc.NetworkID(context.Background())
+		})
 		if err != nil {
 			l.Error("Failed to request network id",
 				zap.Error(err),

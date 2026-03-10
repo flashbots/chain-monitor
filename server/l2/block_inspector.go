@@ -139,7 +139,9 @@ func NewBlockInspector(cfg *config.L2) (*BlockInspector, error) {
 	}
 
 	{ // chainID, signer
-		chainID, err := bi.rpc.NetworkID(context.Background())
+		chainID, err := rpc.RetryOnStartup(func() (*big.Int, error) {
+			return bi.rpc.NetworkID(context.Background())
+		})
 		if err != nil {
 			l.Error("Failed to request network id",
 				zap.Error(err),
@@ -263,7 +265,9 @@ func NewBlockInspector(cfg *config.L2) (*BlockInspector, error) {
 	}
 
 	{ // blocks, blockHeight
-		blockHeight, err := bi.rpc.BlockNumber(context.Background())
+		blockHeight, err := rpc.RetryOnStartup(func() (uint64, error) {
+			return bi.rpc.BlockNumber(context.Background())
+		})
 		if err != nil {
 			l.Error("Failed to request block number",
 				zap.Error(err),

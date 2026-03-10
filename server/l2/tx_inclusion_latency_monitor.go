@@ -91,7 +91,9 @@ func NewTxInclusionLatencyMonitor(cfg *config.L2) (*TxInclusionLatencyMonitor, e
 	}
 
 	{ // chainID, signer
-		chainID, err := m.rpc.NetworkID(context.Background())
+		chainID, err := rpc.RetryOnStartup(func() (*big.Int, error) {
+			return m.rpc.NetworkID(context.Background())
+		})
 		if err != nil {
 			l.Error("Failed to request network id",
 				zap.Error(err),
