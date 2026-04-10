@@ -279,6 +279,13 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
+
+				if flashblocksTiming, ok := metrics.FlashblocksTiming[fb.stream]; ok {
+					if fb.flashblock.Index < len(flashblocksTiming) {
+						flashblocksTiming[fb.flashblock.Index].Record(ctx, int64(offset))
+					}
+				}
+
 				l.Info("Received flashblock on public stream",
 					zap.Time("timestamp", fb.timestamp),
 					zap.Float64("offset_ms", offset),
@@ -305,12 +312,23 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 				}
 
 			case fb := <-fm.flashblocksPrivate:
+				now := time.Now().UnixNano()
+				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
+				offset := float64(1000000000-(blockTime-now)) / 1000000
+
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
 					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
+
+				if flashblocksTiming, ok := metrics.FlashblocksTiming[fb.stream]; ok {
+					if fb.flashblock.Index < len(flashblocksTiming) {
+						flashblocksTiming[fb.flashblock.Index].Record(ctx, int64(offset))
+					}
+				}
+
 				l.Debug("Received flashblock on private stream",
 					zap.Time("timestamp", fb.timestamp),
 					zap.String("stream", fb.stream),

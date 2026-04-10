@@ -90,7 +90,7 @@ func (s *Server) Run() error {
 	l := s.logger
 	ctx := logutils.ContextWithLogger(context.Background(), l)
 
-	if err := metrics.Setup(ctx, s.cfg.L2.ProbeTx, s.observe); err != nil {
+	if err := metrics.Setup(ctx, s.cfg, s.observe); err != nil {
 		return err
 	}
 
