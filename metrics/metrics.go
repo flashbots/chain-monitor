@@ -199,7 +199,7 @@ func setupFlashblocksTiming(ctx context.Context, cfg *config.Config) error {
 
 	for stream := range cfg.L2.MonitorFlashblocksPublicStreams {
 		FlashblocksTiming[stream] = make([]*Int64Candlestick, 0, cfg.L2.FlashblocksPerBlock)
-		for idx := range cfg.L2.FlashblocksPerBlock {
+		for idx := range cfg.L2.FlashblocksPerBlock + 1 {
 			m, err := NewInt64Candlestick(
 				fmt.Sprintf("flashblock_%d_timing", idx),
 				fmt.Sprintf("block-relative time in milliseconds of flashblock #%d arrival", idx),
