@@ -286,7 +286,7 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 					}
 				}
 
-				l.Info("Received flashblock on public stream",
+				l.Debug("Received flashblock on public stream",
 					zap.Time("timestamp", fb.timestamp),
 					zap.Float64("offset_ms", offset),
 					zap.String("stream", fb.stream),
@@ -300,7 +300,6 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 
 				fm.processFlashblock(ctx, fb, last)
 				fm.lastFlashblockPublic[fb.stream] = fb
-				fm.detectInconsistentFlashblocks(ctx, fb)
 
 				if fb.stream == fm.cfg.mainPublicStreamName {
 					select {
@@ -436,23 +435,21 @@ func (fm *FlashblocksMonitor) detectInconsistentFlashblocks(ctx context.Context,
 			return true
 		}
 
-		if this.flashblock.Metadata.Equal(that.flashblock.Metadata) {
+		if this.flashblock.Metadata.Equal(that.flashblock.Metadata) && this.flashblock.Equal(that.flashblock) {
 			return true
 		}
 
 		l.Warn("Mismatching flashblocks",
 			zap.String("payload_id", this.flashblock.PayloadId),
 			zap.Int("index", this.flashblock.Index),
-			zap.Any("this", this),
-			zap.Any("that", that),
+			zap.String("stream", this.stream),
+			zap.String("block_hash", this.flashblock.Diff.BlockHash),
+			zap.String("reference_block_hash", that.flashblock.Diff.BlockHash),
 		)
 		return false
 	}
 
 	matches := true
-	for _, that := range fm.lastFlashblockPrivate {
-		matches = matches && compare(this, that)
-	}
 	for _, that := range fm.lastFlashblockPublic {
 		matches = matches && compare(this, that)
 	}
