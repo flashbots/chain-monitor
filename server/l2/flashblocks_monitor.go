@@ -269,9 +269,8 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 		for ctx.Err() == nil {
 			select {
 			case fb := <-fm.flashblocksPublic:
-				now := time.Now().UnixNano()
 				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
-				offset := float64(1000000000-(blockTime-now)) / 1000000
+				offset := float64(1000000000-(blockTime-fb.timestamp.UnixNano())) / 1000000
 
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
@@ -311,9 +310,8 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 				}
 
 			case fb := <-fm.flashblocksPrivate:
-				now := time.Now().UnixNano()
 				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
-				offset := float64(1000000000-(blockTime-now)) / 1000000
+				offset := float64(1000000000-(blockTime-fb.timestamp.UnixNano())) / 1000000
 
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
