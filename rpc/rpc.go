@@ -16,7 +16,33 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/flashbots/chain-monitor/utils"
+	"go.uber.org/zap"
 )
+
+const (
+	startupRetryTimeout  = 30 * time.Second
+	startupRetryInterval = time.Second
+)
+
+// RetryOnStartup retries fn until it succeeds or the startup timeout (30s) elapses.
+// Used during initialization to wait for RPC endpoints to become available.
+func RetryOnStartup[T any](fn func() (T, error)) (T, error) {
+	deadline := time.Now().Add(startupRetryTimeout)
+	for {
+		result, err := fn()
+		if err == nil {
+			return result, nil
+		}
+		if time.Now().After(deadline) {
+			return result, err
+		}
+		zap.L().Warn("Not ready, retrying...",
+			zap.Duration("retry_in", startupRetryInterval),
+			zap.Error(err),
+		)
+		time.Sleep(startupRetryInterval)
+	}
+}
 
 type RPC struct {
 	main      *ethclient.Client
@@ -33,7 +59,9 @@ var (
 )
 
 func New(networkID uint64, url string, fallback ...string) (*RPC, error) {
-	cli, err := ethclient.Dial(url)
+	cli, err := RetryOnStartup(func() (*ethclient.Client, error) {
+		return ethclient.Dial(url)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w",
 			errFailedToDial, url, err,
@@ -56,7 +84,9 @@ func New(networkID uint64, url string, fallback ...string) (*RPC, error) {
 	}
 
 	for _, url := range fallback {
-		cli, err := ethclient.Dial(url)
+		cli, err := RetryOnStartup(func() (*ethclient.Client, error) {
+			return ethclient.Dial(url)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s: %w",
 				errFailedToDial, url, err,
