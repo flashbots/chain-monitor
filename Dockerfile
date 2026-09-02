@@ -1,6 +1,6 @@
 # stage: build ---------------------------------------------------------
 
-FROM golang:1.22-alpine as build
+FROM golang:1.26-alpine AS build
 
 RUN apk add --no-cache gcc musl-dev linux-headers
 

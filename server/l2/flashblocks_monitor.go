@@ -39,6 +39,8 @@ type FlashblocksMonitor struct {
 }
 
 type flashblocksMonitorConfig struct {
+	genesisTime          int64
+	secondsPerBlock      int64
 	flashblocksPerBlock  int
 	networkID            int64
 	maxMessageSize       int64
@@ -76,6 +78,8 @@ func NewFlashblocksMonitor(cfg *config.L2) (*FlashblocksMonitor, error) {
 		lastFlashblockPublic:  make(map[string]*flashblockEvent, len(cfg.MonitorFlashblocksPublicStreams)),
 
 		cfg: &flashblocksMonitorConfig{
+			genesisTime:          int64(cfg.GenesisTime),
+			secondsPerBlock:      int64(cfg.BlockTime / time.Second),
 			mainPublicStreamName: cfg.MonitorFlashblocksMainPublicStreamName,
 			maxMessageSize:       cfg.MonitorFlashblocksMaxWsMessageSizeKb * 1024,
 			networkID:            int64(cfg.NetworkID),
@@ -265,14 +269,25 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 		for ctx.Err() == nil {
 			select {
 			case fb := <-fm.flashblocksPublic:
+				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
+				offset := float64(1000000000-(blockTime-fb.timestamp.UnixNano())) / 1000000
+
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
 					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("public")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
+
+				if flashblocksTiming, ok := metrics.FlashblocksTiming[fb.stream]; ok {
+					if fb.flashblock.Index < len(flashblocksTiming) {
+						flashblocksTiming[fb.flashblock.Index].Record(ctx, int64(offset))
+					}
+				}
+
 				l.Debug("Received flashblock on public stream",
 					zap.Time("timestamp", fb.timestamp),
+					zap.Float64("offset_ms", offset),
 					zap.String("stream", fb.stream),
 					zap.Any("flashblock", fb.flashblock),
 				)
@@ -284,7 +299,6 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 
 				fm.processFlashblock(ctx, fb, last)
 				fm.lastFlashblockPublic[fb.stream] = fb
-				fm.detectInconsistentFlashblocks(ctx, fb)
 
 				if fb.stream == fm.cfg.mainPublicStreamName {
 					select {
@@ -296,12 +310,22 @@ func (fm *FlashblocksMonitor) processFlashblocks(
 				}
 
 			case fb := <-fm.flashblocksPrivate:
+				blockTime := 1000000000 * (fm.cfg.genesisTime + fm.cfg.secondsPerBlock*int64(fb.flashblock.Metadata.BlockNumber))
+				offset := float64(1000000000-(blockTime-fb.timestamp.UnixNano())) / 1000000
+
 				metrics.FlashblocksReceiveSuccessCount.Add(ctx, 1, otelapi.WithAttributes(
 					attribute.KeyValue{Key: "kind", Value: attribute.StringValue("l2")},
 					attribute.KeyValue{Key: "stream", Value: attribute.StringValue(fb.stream)},
 					attribute.KeyValue{Key: "stream_type", Value: attribute.StringValue("private")},
 					attribute.KeyValue{Key: "network_id", Value: attribute.Int64Value(fm.cfg.networkID)},
 				))
+
+				if flashblocksTiming, ok := metrics.FlashblocksTiming[fb.stream]; ok {
+					if fb.flashblock.Index < len(flashblocksTiming) {
+						flashblocksTiming[fb.flashblock.Index].Record(ctx, int64(offset))
+					}
+				}
+
 				l.Debug("Received flashblock on private stream",
 					zap.Time("timestamp", fb.timestamp),
 					zap.String("stream", fb.stream),
@@ -409,23 +433,21 @@ func (fm *FlashblocksMonitor) detectInconsistentFlashblocks(ctx context.Context,
 			return true
 		}
 
-		if this.flashblock.Metadata.Equal(that.flashblock.Metadata) {
+		if this.flashblock.Metadata.Equal(that.flashblock.Metadata) && this.flashblock.Equal(that.flashblock) {
 			return true
 		}
 
 		l.Warn("Mismatching flashblocks",
 			zap.String("payload_id", this.flashblock.PayloadId),
 			zap.Int("index", this.flashblock.Index),
-			zap.Any("this", this),
-			zap.Any("that", that),
+			zap.String("stream", this.stream),
+			zap.String("block_hash", this.flashblock.Diff.BlockHash),
+			zap.String("reference_block_hash", that.flashblock.Diff.BlockHash),
 		)
 		return false
 	}
 
 	matches := true
-	for _, that := range fm.lastFlashblockPrivate {
-		matches = matches && compare(this, that)
-	}
 	for _, that := range fm.lastFlashblockPublic {
 		matches = matches && compare(this, that)
 	}

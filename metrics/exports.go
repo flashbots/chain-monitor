@@ -23,6 +23,7 @@ var (
 	FlashblocksReceiveFailureCount otelapi.Int64Counter
 	FlashblocksReceiveSuccessCount otelapi.Int64Counter
 	FlashblocksSkipped             otelapi.Int64Counter
+	FlashblocksTiming              map[string][]*Int64Candlestick
 
 	FlashtestationsLandedCount          otelapi.Int64Gauge
 	FlashtestationsMissedCount          otelapi.Int64Gauge
@@ -52,7 +53,7 @@ var (
 )
 
 var (
-	setups = []func(context.Context, *config.ProbeTx) error{
+	setups = []func(context.Context, *config.Config) error{
 		setupMeter, // must come first
 
 		setupBlockHeight,
@@ -70,6 +71,7 @@ var (
 		setupFlashblocksReceiveFailureCount,
 		setupFlashblocksReceiveSuccessCount,
 		setupFlashblocksSkipped,
+		setupFlashblocksTiming,
 
 		setupFlashtestationsLandedCount,
 		setupFlashtestationsMissedCount,

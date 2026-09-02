@@ -1,6 +1,6 @@
 # stage: run
 
-FROM gcr.io/distroless/static-debian12 as runner
+FROM gcr.io/distroless/static-debian12 AS runner
 
 WORKDIR /app
 
