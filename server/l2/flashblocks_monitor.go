@@ -85,6 +85,10 @@ func NewFlashblocksMonitor(cfg *config.L2) (*FlashblocksMonitor, error) {
 			networkID:            int64(cfg.NetworkID),
 			privateStreams:       cfg.MonitorFlashblocksPrivateStreams,
 			publicStreams:        cfg.MonitorFlashblocksPublicStreams,
+			// was never assigned: the output channel came out unbuffered
+			// (make(chan, 2*0)) and the skipped-flashblock count collapsed
+			// to just last.Index, ignoring whole skipped blocks
+			flashblocksPerBlock: int(cfg.FlashblocksPerBlock),
 		},
 	}
 
